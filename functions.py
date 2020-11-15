@@ -1,10 +1,10 @@
 import numpy as np
 
-def sigmoid(x, alpha=.01):
+def sigmoid(x, alpha=.0001):
     return 1/(1 + np.exp(-alpha*x))
 
 
-def d_sigmoid(x, alpha=.01):
+def d_sigmoid(x, alpha=.0001):
     sigm = sigmoid(x, alpha)
     return (1 - sigm)*sigm
 

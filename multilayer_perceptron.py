@@ -2,17 +2,14 @@
 from typing import List
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from functions import d_sigmoid, sigmoid
 
 train_data = pd.read_csv('data/train.csv')
-X_train = np.array(train_data.iloc[:, 1:])
-y_train = np.array(train_data.iloc[:, 0])
+test_data = pd.read_csv('data/test.csv')
 
-# input_neurons = 784
-# layer_1_neurons = 1
-# output_neurons = 10
 
-class multilayerPerceptron:
+class Network(object):
     def __init__(self, n_input_layer: int, n_output_layer: int, n_hidden_layer: List[int]):
         self.structure = [n_input_layer, *n_hidden_layer, n_output_layer]
         self.W = None
@@ -28,13 +25,7 @@ class multilayerPerceptron:
         return a_layers
 
 
-    def backprop(self, X, y, steps, learning_rate=.01):
-        rand = np.random.random
-        # init random w
-        self.W = [rand(size=(self.structure[i+1], self.structure[i])) 
-                  for i in range(len(self.structure)-1)
-                  ]
-
+    def backprop(self, X, y, steps, learning_rate=.00001):
         for d in range(steps):
             a_layers = self.feedforward(X[d])
             out = a_layers[-1]
@@ -117,31 +108,36 @@ class multilayerPerceptron:
         return predicted
     
 
-    def train_test(self, X, y):
-        n_train = int(X.shape[0]*.8-1)
-        # train
-        X_train = np.array(X.iloc[:n_train, :])
-        y_train = np.array(y.iloc[:n_train])
-        # test
-        X_test = np.array(X.iloc[n_train:, :])
-        y_test = np.array(y.iloc[n_train:])
+    def train(self, train_data, epochs):
+        # init W
+        np.random.seed(100)
+        rand = np.random.random
+        self.W = [rand(size=(self.structure[i+1], self.structure[i])) 
+                  for i in range(len(self.structure)-1)
+                  ]
 
-        n_input = self.structure[0]
-        n_output = self.structure[1]
-        self.backprop(X_train, y_train, X_train.shape[0])
-
-        # make test
-        true_answer = 0
-        for x, y in zip(X_test, y_test):
-            true_answer += self.feedforward(x)[-1].argmax() == y
+        for epoch in range(epochs):
+            train_data = np.array(train_data)
+            np.random.shuffle(train_data)
+            y, X = (train_data[:, 0], train_data[:, 1:])
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2)
         
-        return true_answer/y_test.shape[0]
+            self.backprop(X_train, y_train, X_train.shape[0])
+            print(f'Epoch {epoch} complete!')
+
+            # make test
+            true_answer = 0
+            for x, y in zip(X_test, y_test):
+                true_answer += self.feedforward(x)[-1].argmax() == y
+            print(f"Scoring of {epoch} is {true_answer/y_test.shape[0]}")
+        
+        return "Complete"
 
 
 test_data = pd.read_csv('data/test.csv')
-nn = multilayerPerceptron(28*28, 10, (8, 8))
+nn = Network(28*28, 10, (8, 8))
 # nn.backprop(X_train, y_train, X_train.shape[0])
-print(nn.train_test(pd.DataFrame(X_train), pd.Series(y_train)))
+print(nn.train(train_data, 30))
 
 
 
