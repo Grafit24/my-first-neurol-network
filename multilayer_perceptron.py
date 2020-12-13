@@ -8,7 +8,7 @@ import numpy.random as rand
 from loader import load_data
 
 train_data, valid_data = load_data("train.csv", valid=True)
-test_data = load_data("test.csv")
+# test_data = load_data("test.csv")
 
 class Network(object):
     def __init__(self, sizes: List[int], random_state=None):
@@ -49,8 +49,11 @@ class Network(object):
             # Пишем точность сети.
             text = "Epoch {0} complete ".format(epoch+1)
             if test_data != None:
-                text += "with accuracity {0}/{1}".format(
-                    self.evaluate(test_data), len(test_data)
+                evaluate_result = self.evaluate(test_data)
+                n_test_data = len(test_data)
+                text += "with accuracity {0}/{1} = {2}".format(
+                    evaluate_result, n_test_data, 
+                    evaluate_result/n_test_data
                     )
             print(text)
         
@@ -108,7 +111,7 @@ class Network(object):
     def evaluate(self, test_data):
         test_results = [(np.argmax(self.feedforward(x)), y)
                         for (x, y) in test_data]
-        return sum(int(x == y) for (x, y) in test_results)
+        return sum(int(x == y.argmax()) for (x, y) in test_results)
 
 
     def cost_derivative(self, output, y):
@@ -123,10 +126,9 @@ def sigmoid_prime(x):
     sigm = sigmoid(x)
     return (1. - sigm)*sigm
 
+
 net = Network([784, 16, 10])
-with open('weights_and_biases.pickle', 'wb') as f:
-    pickle.dump((net.weights, net.biases), f, protocol=2)
-# net.SGD(train_data, 3., 30, 30, test_data=valid_data)
+net.SGD(train_data, 3., 30, 30, test_data=valid_data)
 
 
 
