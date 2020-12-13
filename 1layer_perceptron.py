@@ -1,7 +1,5 @@
-# %%
 import numpy as np
 import pandas as pd
-from functions import sigmoid, d_sigmoid
 
 train_data = pd.read_csv('data/train.csv')
 X_train = np.array(train_data.iloc[:, 1:])
@@ -12,12 +10,11 @@ class P1L:
     """Perceptron with one layer - output layer. Uses sigmoid function"""
     def __init__(self, n_input, n_output):
         self.structure = (n_input, n_output)
-        self.alpha = .001
     
     def feedforward(self, x: "vector")-> "vector":
-        return sigmoid(np.dot(self.W, x), self.alpha)
+        return sigmoid(np.dot(self.W, x))
 
-    def backpropogation(self, X, y, steps, learning_rate=.1):
+    def backpropogation(self, X, y, steps, learning_rate=3):
         # init W_0
         n_input = self.structure[0]
         n_output = self.structure[1]
@@ -36,7 +33,7 @@ class P1L:
             dsigma = np.zeros(n_output)
             for j in range(n_output):
                 z = np.dot(self.W[j, :], x)
-                dsigma[j] = d_sigmoid(z, self.alpha)
+                dsigma[j] = sigmoid_prime(z)
             
             # calculate dC/dwij
             E = dsigma*dC_da
@@ -74,6 +71,13 @@ class P1L:
             predicted[i] = int(self.feedforward(x).argmax())
         return predicted
 
+def sigmoid(x):
+    return 1./(1. + np.exp(-x))
+
+
+def sigmoid_prime(x):
+    sigm = sigmoid(x)
+    return (1. - sigm)*sigm
 
 test_data = pd.read_csv('data/test.csv')
 model = P1L(28*28, 10)
