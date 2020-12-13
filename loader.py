@@ -1,4 +1,5 @@
 from os import path
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -20,3 +21,7 @@ def load_data(file_name, valid=False, nrows=None):
     else:
         data = [(x, y) for x, y in zip(X, Y)]
     return data
+
+
+with open('test_data.pickle', 'wb') as f:
+    pickle.dump(load_data('train.csv', nrows=1), f, protocol=2)
