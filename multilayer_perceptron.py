@@ -12,9 +12,8 @@ from typing import List, Tuple
 import numpy as np
 import numpy.random as rand
 
-from loader import load_data
+from loader import load_train_data, load_test_data, export_data
 
-train_data, valid_data = load_data("train.csv", valid=True)
 
 class Network(object):
     """Многослойный перцептрон с сигмоидной функцией активации.
@@ -33,13 +32,15 @@ class Network(object):
     update_mini_batch(mini_batch, eta)
         Обновляет веса и смещения по примерам из mini_batch.
     backprop(x, y)
-        Алгоритм обратного распространения ошибки
+        Алгоритм обратного распространения ошибки.
     feedforward(a)
         Прямой проход через нейросеть. 
     evaluate(test_data)
         Считает точность сети на тестовых данных(test_data).
     сost_deveriate(output, y)
-        Возвращает вектор частный производных dC/da_output
+        Возвращает вектор частный производных dC/da_output.
+    predict(X)
+        Определяет наиболее вероятный класс вектора x из множества X.
     """
     def __init__(self, sizes: List[int]):
         self.nlayers = len(sizes) 
@@ -85,7 +86,7 @@ class Network(object):
             for mini_batch in mini_batches:
                 self.update_mini_bunch(mini_batch, eta)
             
-            # Пишем в консоль точность сети.
+            # Пишем в консоль точность сети
             text = "Epoch {0} complete ".format(epoch+1)
             if test_data != None:
                 evaluate_result = self.evaluate(test_data)
@@ -127,7 +128,7 @@ class Network(object):
                         for b, nb in zip(self.biases, nabla_b)]
         
     def backprop(self, x: np.ndarray, y:np.ndarray)-> Tuple[List[np.ndarray]]:
-        """Алгоритм обратного распространения ошибки. Возвращает dC/dw и dC/db"""
+        """Алгоритм обратного распространения ошибки. Возвращает dC/dw и dC/db."""
         nabla_w = [np.zeros(w.shape) for w in self.weights]
         nabla_b = [np.zeros(b.shape) for b in self.biases]
 
@@ -168,7 +169,16 @@ class Network(object):
         test_results = [(np.argmax(self.feedforward(x)), y)
                         for (x, y) in test_data]
         return sum(int(x == y.argmax()) for (x, y) in test_results)
-
+    
+    def predict(self, X):
+        """Определяет наиболее вероятный класс вектора x 
+        из множества X, состоящего из векторов длинны входного слоя.
+        """
+        results = []
+        for x in X:
+            y_predicted = np.argmax(self.feedforward(x))
+            results.append(y_predicted)
+        return np.array(results)
 
     def cost_derivative(self, output, y):
         """Возвращает вектор частный производных dC/da_output"""
@@ -176,15 +186,11 @@ class Network(object):
 
 
 def sigmoid(x):
-    """Сигмоидная функция."""
+    """Сигмоидная функция"""
     return 1./(1. + np.exp(-x))
 
 
 def sigmoid_prime(x):
-    """Производная сигмойдной функции."""
+    """Производная сигмойдной функции"""
     sigm = sigmoid(x)
     return (1. - sigm)*sigm
-
-
-net = Network([784, 16, 10])
-net.SGD(train_data, 3., 30, 30, test_data=valid_data)
