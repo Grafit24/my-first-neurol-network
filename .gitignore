@@ -3,3 +3,4 @@ plan.md
 __pycache__/
 somefile.py
 .vscode/
+workspace.code-workspace

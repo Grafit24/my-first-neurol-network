@@ -1,6 +1,13 @@
-import os
+"""Многослойный перцептрон
+
+обучающющийся через стохастический крадиентный спуск. Для вычисления 
+градиента используются алгоритм обратного распространения ошибки.
+
+Note. Весь код ниже написан с целью понять ,что творится под "капотом" 
+нейросети. Писался код с опорой на книгу "Neural Networks and Deep Learning" 
+Michael Nielsen'а.
+"""
 from typing import List, Tuple
-import pickle
 
 import numpy as np
 import numpy.random as rand
@@ -8,10 +15,33 @@ import numpy.random as rand
 from loader import load_data
 
 train_data, valid_data = load_data("train.csv", valid=True)
-# test_data = load_data("test.csv")
 
 class Network(object):
-    def __init__(self, sizes: List[int], random_state=None):
+    """Многослойный перцептрон с сигмоидной функцией активации.
+    
+    Attributes
+    ----------
+    sizes : List[int]
+        Размер сети каждое число соответсвует кол-ву нейронов 
+        в соответсвующим слое. Первый элемент списка соответсвует 
+        кол-ву нейронов в входном слое ,а последний в выходном.
+    
+    Methods
+    -------
+    SGD(training_data, eta, epochs, mini_batch_size, test_data=None)
+        Обучает нейросеть по алгоритму stochastic gradient descent.
+    update_mini_batch(mini_batch, eta)
+        Обновляет веса и смещения по примерам из mini_batch.
+    backprop(x, y)
+        Алгоритм обратного распространения ошибки
+    feedforward(a)
+        Прямой проход через нейросеть. 
+    evaluate(test_data)
+        Считает точность сети на тестовых данных(test_data).
+    сost_deveriate(output, y)
+        Возвращает вектор частный производных dC/da_output
+    """
+    def __init__(self, sizes: List[int]):
         self.nlayers = len(sizes) 
         self.sizes = sizes
 
@@ -20,33 +50,42 @@ class Network(object):
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
     
-    def SGD(self, training_data, eta, epochs, mini_bunch_size, test_data=None):
-        """Используем stochastic gradient descent для тренировки нейросети.
+    def SGD(self, training_data, eta, epochs, mini_batch_size, test_data=None):
+        """Обучает нейросеть по алгоритму stochastic gradient descent.
+
+        В кратце суть алгоритма. Ищем наискорейший спуск к точке минимума cost function 
+        обновляя для этого веса и смещения используя обратный градиент. 
+        Стохастический же алгоритм различен тем ,что в нём мы обновляем веса не по каждому примеру,
+        а по усреднённой сумме подмножества всех примеров(по mini-batch'у).
+        Note. Это позволяет получить выйгрыш в скорости вычислений. 
+        
         Prameters
         ---------
-        training data : List[Tuple[(X, y)]]
-            это лист вида описанного в load_data
+        training data : List[Tuple[(x, y)]]
+            это список соостоящий из кортежей первый элемент которых 
+            вектор x размера входного слоя и вектор y размера выходного слоя.
         eta : int
             learning rate
         epochs : int
-        mini_bunch_size : int
+        mini_batch_size : int
         test_data : List[Tuple[(X, y)]]
             Если None ,тогда не пишет точность сети 
             после каждой эпохи. В обратном случае 
-            соответсвенно пишет.
+            соответсвенно пишет. Должен быть тот же вид,
+            что и у training_data.
         """
         for epoch in range(epochs):
             rand.shuffle(training_data)
             
             n_train_d = len(training_data)
-            mini_bunches = [training_data[k:(mini_bunch_size+k)] 
-                            for k in range(0, n_train_d, mini_bunch_size)]
+            mini_batches = [training_data[k:(mini_batch_size+k)] 
+                            for k in range(0, n_train_d, mini_batch_size)]
 
             # Обновляем веса по mini-bunch
-            for mini_bunch in mini_bunches:
-                self.update_mini_bunch(mini_bunch, eta)
+            for mini_batch in mini_batches:
+                self.update_mini_bunch(mini_batch, eta)
             
-            # Пишем точность сети.
+            # Пишем в консоль точность сети.
             text = "Epoch {0} complete ".format(epoch+1)
             if test_data != None:
                 evaluate_result = self.evaluate(test_data)
@@ -57,28 +96,38 @@ class Network(object):
                     )
             print(text)
         
-    def update_mini_bunch(self, mini_bunch: list, eta: int):
+    def update_mini_bunch(self, mini_batch: list, eta: float):
+        """Обновляет веса и смещения по примерам из mini_batch.
+        
+        Считаем градиенты для всех примеров mini-batch после 
+        вычисляем их ср.ариф. умноженное на learning_rate 
+        и отнимает от старых значений(тк для спуска нужен обратный градиент).
+
+        Parameters
+        ----------
+        mini_batch : List[Tuple[x, y]]
+            Список вида описанного в функции SGD/training_data.
+        eta : float
+            learning_rate.
+        """
         nabla_w = [np.zeros(w.shape) for w in self.weights]
         nabla_b = [np.zeros(b.shape) for b in self.biases]
-        for x, y in mini_bunch:
+        # Суммирование изменений w, b всех примеров.
+        for x, y in mini_batch:
             delta_nabla_w, delta_nabla_b = self.backprop(x, y)
             nabla_w = [nw+dnw for nw, dnw in 
                         zip(nabla_w, delta_nabla_w)]
             nabla_b = [nb+dnb for nb, dnb in 
                         zip(nabla_b, delta_nabla_b)]
-            
-        mb_size = len(mini_bunch)
+
+        mb_size = len(mini_batch)
         self.weights = [w-(eta/mb_size)*nw 
                         for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b-(eta/mb_size)*nb 
                         for b, nb in zip(self.biases, nabla_b)]
         
-    def feedforward(self, a):
-        for w, b in zip(self.weights, self.biases):
-            a = sigmoid(np.dot(w, a)+b)
-        return a
-        
-    def backprop(self, x, y):
+    def backprop(self, x: np.ndarray, y:np.ndarray)-> Tuple[List[np.ndarray]]:
+        """Алгоритм обратного распространения ошибки. Возвращает dC/dw и dC/db"""
         nabla_w = [np.zeros(w.shape) for w in self.weights]
         nabla_b = [np.zeros(b.shape) for b in self.biases]
 
@@ -107,34 +156,35 @@ class Network(object):
             nabla_b[-l] = delta
 
         return (nabla_w, nabla_b)
+
+    def feedforward(self, a: np.ndarray)->np.ndarray:
+        """Прямой проход через нейросеть."""
+        for w, b in zip(self.weights, self.biases):
+            a = sigmoid(np.dot(w, a)+b)
+        return a
         
     def evaluate(self, test_data):
+        """Считает точность сети на тестовых данных(test_data)"""
         test_results = [(np.argmax(self.feedforward(x)), y)
                         for (x, y) in test_data]
         return sum(int(x == y.argmax()) for (x, y) in test_results)
 
 
     def cost_derivative(self, output, y):
+        """Возвращает вектор частный производных dC/da_output"""
         return output-y
 
 
 def sigmoid(x):
+    """Сигмоидная функция."""
     return 1./(1. + np.exp(-x))
 
 
 def sigmoid_prime(x):
+    """Производная сигмойдной функции."""
     sigm = sigmoid(x)
     return (1. - sigm)*sigm
 
 
 net = Network([784, 16, 10])
 net.SGD(train_data, 3., 30, 30, test_data=valid_data)
-
-
-
-# predict = pd.DataFrame(nn.predict(np.array(test_data)))
-# predict.set_index(pd.Series(test_data.index, name='ImageId')+1, inplace=True)
-# predict.columns = ['Label']
-# predict['Label'] = predict['Label'].astype(int)
-# predict.to_csv('multiPerceptron_test.csv')
-                        
