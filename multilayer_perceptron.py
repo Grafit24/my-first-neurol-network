@@ -216,7 +216,7 @@ def sigmoid_prime(x):
     sigm = sigmoid(x)
     return (1. - sigm)*sigm
 
-train, valid = load_train_data('train.csv', valid_size=.2)
+train, valid = load_train_data('train.csv', valid_size=.2, random_state=42)
 
 net = Network([784, 10], random_state=42)
 net.SGD(train, 3, 10, 30, test_data=valid)
