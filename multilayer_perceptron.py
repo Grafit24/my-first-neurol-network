@@ -24,30 +24,45 @@ class Network(object):
         Размер сети каждое число соответсвует кол-ву нейронов 
         в соответсвующим слое. Первый элемент списка соответсвует 
         кол-ву нейронов в входном слое ,а последний в выходном.
+
+    random_state : int
+        Число для установления начальных условий генератора случайных чисел.
+        Если None ,то никак не влияет на генерацию.
+        Note. Используется для тестирования разных параметров ,чтобы исключить 
+        рандом.
     
     Methods
     -------
     SGD(training_data, eta, epochs, mini_batch_size, test_data=None)
         Обучает нейросеть по алгоритму stochastic gradient descent.
+
     update_mini_batch(mini_batch, eta)
         Обновляет веса и смещения по примерам из mini_batch.
+
     backprop(x, y)
         Алгоритм обратного распространения ошибки.
+
     feedforward(a)
         Прямой проход через нейросеть. 
+
     evaluate(test_data)
         Считает точность сети на тестовых данных(test_data).
+
     сost_deveriate(output, y)
         Возвращает вектор частный производных dC/da_output.
+
     predict(X)
         Определяет наиболее вероятный класс вектора x из множества X.
     """
-    def __init__(self, sizes: List[int]):
+    def __init__(self, sizes: List[int], random_state=None):
         self.nlayers = len(sizes) 
         self.sizes = sizes
+        self.random_state = random_state
 
+        rand.seed(random_state)
         self.weights = [rand.randn(sizes[i+1], sizes[i]) 
                         for i in range(self.nlayers-1)]
+        rand.seed(random_state)
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
     
@@ -65,10 +80,14 @@ class Network(object):
         training data : List[Tuple[(x, y)]]
             это список соостоящий из кортежей первый элемент которых 
             вектор x размера входного слоя и вектор y размера выходного слоя.
+
         eta : int
             learning rate
+
         epochs : int
+
         mini_batch_size : int
+
         test_data : List[Tuple[(X, y)]]
             Если None ,тогда не пишет точность сети 
             после каждой эпохи. В обратном случае 
@@ -76,6 +95,7 @@ class Network(object):
             что и у training_data.
         """
         for epoch in range(epochs):
+            np.random.seed(self.random_state)
             rand.shuffle(training_data)
             
             n_train_d = len(training_data)
@@ -108,6 +128,7 @@ class Network(object):
         ----------
         mini_batch : List[Tuple[x, y]]
             Список вида описанного в функции SGD/training_data.
+
         eta : float
             learning_rate.
         """
@@ -194,3 +215,8 @@ def sigmoid_prime(x):
     """Производная сигмойдной функции"""
     sigm = sigmoid(x)
     return (1. - sigm)*sigm
+
+train, valid = load_train_data('train.csv', valid_size=.2)
+
+net = Network([784, 10], random_state=42)
+net.SGD(train, 3, 10, 30, test_data=valid)
