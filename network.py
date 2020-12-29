@@ -182,7 +182,6 @@ class Network(object):
 
         return (nabla_w, nabla_b)
 
-
     def feedforward(self, a: np.ndarray)->np.ndarray:
         """Прямой проход через нейросеть."""
         for w, b in zip(self.weights, self.biases):
@@ -197,9 +196,15 @@ class Network(object):
         
     def evaluate(self, test_data):
         """Считает точность сети на тестовых данных(test_data)"""
-        test_results = [(np.argmax(self.feedforward(x)), y)
-                        for (x, y) in test_data]
-        return sum(int(x == y.argmax()) for (x, y) in test_results)
+        x = [xi for xi, _ in test_data]
+        x = np.array(x).transpose()
+        y = [yi for _, yi in test_data]
+        y = np.array(y).argmax(axis=1)
+
+        test_results = np.argmax(self.matrixbase_feedforward(x), axis=0)
+
+        # Надо будет изменить функцию ,чтобы она возрачала булева да нет.
+        return (test_results==y).sum()
     
     def predict(self, X):
         """Определяет наиболее вероятный класс вектора x 
@@ -226,7 +231,10 @@ def sigmoid_prime(x):
     sigm = sigmoid(x)
     return (1. - sigm)*sigm
 
+import time
 train, valid = load_train_data('train.csv', valid_size=.2, random_state=42)
 
-net = Network([784, 10], random_state=42)
-net.SGD(train, 3, 10, 30, test_data=valid)
+netw = Network([784, 16, 16, 10], random_state=42)
+start_time = time.time()
+netw.SGD(train, 3, 20, 30, test_data=valid)
+print("--- %s seconds ---" % (time.time() - start_time))
