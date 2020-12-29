@@ -104,7 +104,16 @@ class Network(object):
 
             # Обновляем веса по mini-bunch
             for mini_batch in mini_batches:
-                self.update_mini_bunch(mini_batch, eta)
+                data = mini_batch
+                x = []
+                y = []
+                for i in data:
+                    x.append(i[0])
+                    y.append(i[1])
+
+                x = np.array(x).transpose()
+                y = np.array(y).transpose()
+                self.update_mb(x, y, eta)
             
             # Пишем в консоль точность сети
             text = "Epoch {0} complete ".format(epoch+1)
@@ -116,8 +125,8 @@ class Network(object):
                     evaluate_result/n_test_data
                     )
             print(text)
-        
-    def update_mini_bunch(self, mini_batch: list, eta: float):
+
+    def update_mb(self, x, y, eta):
         """Обновляет веса и смещения по примерам из mini_batch.
         
         Считаем градиенты для всех примеров mini-batch после 
@@ -132,54 +141,17 @@ class Network(object):
         eta : float
             learning_rate.
         """
-        nabla_w = [np.zeros(w.shape) for w in self.weights]
-        nabla_b = [np.zeros(b.shape) for b in self.biases]
-        # Суммирование изменений w, b всех примеров.
-        for x, y in mini_batch:
-            delta_nabla_w, delta_nabla_b = self.backprop(x, y)
-            nabla_w = [nw+dnw for nw, dnw in 
-                        zip(nabla_w, delta_nabla_w)]
-            nabla_b = [nb+dnb for nb, dnb in 
-                        zip(nabla_b, delta_nabla_b)]
+        nabla_w, nabla_b = self.backprop(x, y)
 
-        mb_size = len(mini_batch)
+        mb_size = x.shape[1]
+        # вернуть self !
         self.weights = [w-(eta/mb_size)*nw 
                         for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b-(eta/mb_size)*nb 
                         for b, nb in zip(self.biases, nabla_b)]
-        
-    def backprop(self, x: np.ndarray, y:np.ndarray)-> Tuple[List[np.ndarray]]:
-        """Алгоритм обратного распространения ошибки. Возвращает dC/dw и dC/db."""
-        nabla_w = [np.zeros(w.shape) for w in self.weights]
-        nabla_b = [np.zeros(b.shape) for b in self.biases]
-
-        activation = x
-        activations = [x]
-        zs = []
-        # feedforward
-        for w, b in zip(self.weights, self.biases):
-            z = np.dot(w, activation)+b
-            zs.append(z)
-            activation = sigmoid(z)
-            activations.append(activation)
-            
-        # output layer
-        cd = self.cost_derivative(activations[-1], y)
-        delta = cd*sigmoid_prime(zs[-1])
-        nabla_w[-1] = np.dot(delta.reshape(-1, 1), activations[-2].reshape(1, -1))
-        nabla_b[-1] = delta
-
-        # hidden layeres
-        for l in range(2, self.nlayers):
-            z = zs[-l]
-            sp = sigmoid_prime(z)
-            delta = np.dot(self.weights[-l+1].transpose(), delta)*sp
-            nabla_w[-l] = np.dot(delta.reshape(-1, 1), activations[-l-1].reshape(1, -1))
-            nabla_b[-l] = delta
-
-        return (nabla_w, nabla_b)
     
-    def matrix_based_backprop(self, x, y):
+    def backprop(self, x, y):
+        """Алгоритм обратного распространения ошибки. Возвращает dC/dw и dC/db."""
         nabla_w = [np.zeros(w.shape) for w in self.weights]
         nabla_b = [np.zeros(b.shape) for b in self.biases]
 
@@ -197,16 +169,16 @@ class Network(object):
         # output layer
         cd = self.cost_derivative(activations[-1], y)
         delta = cd*sigmoid_prime(zs[-1])
-        nabla_w[-1] = np.dot(delta, activations[-2].T)
-        nabla_b[-1] = delta
+        nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+        nabla_b[-1] = delta.sum(axis=1)
 
         # hidden layeres
         for l in range(2, self.nlayers):
             z = zs[-l]
             sp = sigmoid_prime(z)
             delta = np.dot(self.weights[-l+1].transpose(), delta)*sp
-            nabla_w[-l] = np.dot(delta, activations[-l-1].T)
-            nabla_b[-l] = delta
+            nabla_w[-l] = np.dot(delta, activations[-l-1].transpose())
+            nabla_b[-l] = delta.sum(axis=1)
 
         return (nabla_w, nabla_b)
 
@@ -256,47 +228,5 @@ def sigmoid_prime(x):
 
 train, valid = load_train_data('train.csv', valid_size=.2, random_state=42)
 
-net = Network([784, 10, 10], random_state=42)
-# net.SGD(train, 3, 10, 30, test_data=valid)
-
-base_w, base_b = net.weights, net.biases
-
-data = train[:30]
-x = []
-y = []
-for i in data:
-    x.append(i[0])
-    y.append(i[1])
-
-x = np.array(x).transpose()
-y = np.array(y).transpose()
-
-nabla_w = [np.zeros(w.shape) for w in net.weights]
-nabla_b = [np.zeros(b.shape) for b in net.biases]
-# Суммирование изменений w, b всех примеров.
-for test_x, test_y in data:
-    delta_nabla_w, delta_nabla_b = net.backprop(test_x, test_y)
-    nabla_w = [nw+dnw for nw, dnw in 
-               zip(nabla_w, delta_nabla_w)]
-    nabla_b = [nb+dnb for nb, dnb in 
-               zip(nabla_b, delta_nabla_b)]
-
-nw, nb = net.matrix_based_backprop(x, y)
-
-def comparison(nw1, nb1, nw2, nb2):
-    for i in range(len(nw1)):
-        w1 = nw1[i]-base_w[i]
-        w2 = nw2[i]-base_w[i]
-        s = (~(w1==w2))
-        all_n = nw1[i].size
-        print('w{0} not equal in num cases = {1}/{2}'.format(i, s.sum(), all_n))
-        # print('b{0} not equal in num cases = '.format([i]), (~(nb1[i]==nb2[i])).sum())
-        print((w1[s]-w2[s]).min())
-        print('\n')
-
-comparison(nw, nb, nabla_w, nabla_b)
-# y_t = net.matrixbase_feedforward(x)
-# y_tt = net.feedforward(data[0][0])
-# index = y[:, 0] == y_t
-# print(y[:, 0][~index][0])
-# print(y_t[~index][0])
+net = Network([784, 10], random_state=42)
+net.SGD(train, 3, 10, 30, test_data=valid)
