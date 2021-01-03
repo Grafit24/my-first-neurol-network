@@ -11,6 +11,7 @@ from typing import List, Tuple
 
 import numpy as np
 import numpy.random as rand
+import matplotlib.pyplot as plt
 
 from loader import load_train_data, load_test_data, export_data
 
@@ -48,11 +49,15 @@ class Network(object):
     evaluate(test_data)
         Считает точность сети на тестовых данных(test_data).
 
-    сost_deveriate(output, y)
-        Возвращает вектор частный производных dC/da_output.
 
     predict(X)
         Определяет наиболее вероятный класс вектора x из множества X.
+    
+    сost_deveriate(output, y)
+        Возвращает вектор частный производных dC/da_output.
+        
+    cost_function(x)
+        Считает стоимость сети.
     """
     def __init__(self, sizes: List[int], random_state=None):
         self.nlayers = len(sizes) 
@@ -66,7 +71,8 @@ class Network(object):
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
     
-    def SGD(self, training_data, eta, epochs, mini_batch_size, test_data=None):
+    def SGD(self, training_data, eta, epochs, mini_batch_size, 
+            test_data=None, return_results=False):
         """Обучает нейросеть по алгоритму stochastic gradient descent.
 
         В кратце суть алгоритма. Ищем наискорейший спуск к точке минимума cost function 
@@ -93,7 +99,12 @@ class Network(object):
             после каждой эпохи. В обратном случае 
             соответсвенно пишет. Должен быть тот же вид,
             что и у training_data.
+        
+        return_results : bool
+            Если True возвращает результаты обучения сети.
         """
+        accuracy_results = []
+        cost_results = []
         for epoch in range(epochs):
             np.random.seed(self.random_state)
             rand.shuffle(training_data)
@@ -118,13 +129,22 @@ class Network(object):
             # Пишем в консоль точность сети
             text = "Epoch {0} complete ".format(epoch+1)
             if test_data != None:
-                evaluate_result = self.evaluate(test_data)
                 n_test_data = len(test_data)
+
+                acc_r, cf_r = self.evaluate(test_data)
+                evaluate_result = np.sum(acc_r)
+                accuracy_results.append(evaluate_result/n_test_data)
+                cost = np.mean(cf_r)
+                cost_results.append(cost)
+
                 text += "with accuracity {0}/{1} = {2}".format(
                     evaluate_result, n_test_data, 
                     evaluate_result/n_test_data
                     )
             print(text)
+        
+        if return_results:
+            return accuracy_results, cost_results
 
     def update_mb(self, x, y, eta):
         """Обновляет веса и смещения по примерам из mini_batch.
@@ -195,16 +215,24 @@ class Network(object):
         return a
         
     def evaluate(self, test_data):
-        """Считает точность сети на тестовых данных(test_data)"""
+        """Считает точность и функцию стоимости
+         сети на тестовых данных(test_data).
+         """
         x = [xi for xi, _ in test_data]
         x = np.array(x).transpose()
         y = [yi for _, yi in test_data]
-        y = np.array(y).argmax(axis=1)
+        y_matrix = np.array(y).transpose()
+        y_vector = y_matrix.argmax(axis=0)
 
-        test_results = np.argmax(self.matrixbase_feedforward(x), axis=0)
+        # Выход сети.
+        network_results_matrix = self.matrixbase_feedforward(x)
+        # Наиболее вероятный результат выхода сети.
+        network_results_vector = np.argmax(network_results_matrix, axis=0)
 
-        # Надо будет изменить функцию ,чтобы она возрачала булева да нет.
-        return (test_results==y).sum()
+        results = network_results_vector==y_vector
+        cf_results = self.cost_function(network_results_matrix, y_matrix)
+
+        return results, cf_results
     
     def predict(self, X):
         """Определяет наиболее вероятный класс вектора x 
@@ -215,10 +243,30 @@ class Network(object):
             y_predicted = np.argmax(self.feedforward(x))
             results.append(y_predicted)
         return np.array(results)
+    
+    def cost_function(self, output, y):
+        return np.sum(.5*((output-y)**2), axis=0)
 
     def cost_derivative(self, output, y):
         """Возвращает вектор частный производных dC/da_output"""
         return output-y
+    
+
+def visualisation(acc, cf, epochs, figsize=(10, 5)):
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
+    fig.set_size_inches(10, 5)
+    ax1.plot(range(1, epochs+1), acc, color="red")
+    ax2.plot(range(1, epochs+1), cf, color="blue")
+
+    for ax in (ax1, ax2):
+        ax.spines["right"].set_visible(False)    
+        ax.spines["top"].set_visible(False)
+        ax.tick_params(bottom=False, left=False)
+        
+    ax1.set_title("Accuracy")
+    ax2.set_title("Mean cost function")
+
+    plt.show() 
 
 
 def sigmoid(x):
@@ -230,11 +278,3 @@ def sigmoid_prime(x):
     """Производная сигмойдной функции"""
     sigm = sigmoid(x)
     return (1. - sigm)*sigm
-
-import time
-train, valid = load_train_data('train.csv', valid_size=.2, random_state=42)
-
-netw = Network([784, 16, 16, 10], random_state=42)
-start_time = time.time()
-netw.SGD(train, 3, 20, 30, test_data=valid)
-print("--- %s seconds ---" % (time.time() - start_time))
