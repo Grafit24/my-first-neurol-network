@@ -187,8 +187,7 @@ class Network(object):
             activations.append(activation)
             
         # output layer
-        cd = self.cost_derivative(activations[-1], y)
-        delta = cd*sigmoid_prime(zs[-1])
+        delta = self.cost_derivative(activations[-1], y)
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
         nabla_b[-1] = delta.sum(axis=1)
 
@@ -245,7 +244,7 @@ class Network(object):
         return np.array(results)
     
     def cost_function(self, output, y):
-        return np.sum(.5*((output-y)**2), axis=0)
+        return np.sum(-y*np.log(output)-(1-y)*np.log(1-output))
 
     def cost_derivative(self, output, y):
         """Возвращает вектор частный производных dC/da_output"""
