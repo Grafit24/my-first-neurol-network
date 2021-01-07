@@ -4,4 +4,3 @@ somefile.py
 .vscode/
 workspace.code-workspace
 .ipynb_checkpoints/
-*.ipynb
