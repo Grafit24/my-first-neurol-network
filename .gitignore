@@ -1,6 +1,6 @@
-data/
 plan.md
 __pycache__/
 somefile.py
 .vscode/
 workspace.code-workspace
+.ipynb_checkpoints/

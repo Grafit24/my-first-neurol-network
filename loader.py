@@ -14,15 +14,22 @@ from sklearn.model_selection import train_test_split
 
 data_folder = path.join(path.dirname(__file__), 'data')
 
-def load_train_data(file_name: str, valid_size=None, nrows=None):
+def load_train_data(file_name: str, valid_size=None, 
+                    random_state=None, nrows=None):
     """Загружает данные для обучения.
     
     Parameters
     ----------
     file_name : str
         Название файла(не его путь!).
+
     valid_size : str
         Доля данных валидации от всех данных файла.
+
+    random_state : int
+        Число для установления начальных условий генератора случайных чисел.
+        Если None ,то никак не влияет на генерацию.
+
     nrows : int
         Кол-во строк.
     
@@ -42,7 +49,9 @@ def load_train_data(file_name: str, valid_size=None, nrows=None):
 
     if valid_size != None:
         X_train, X_valid, Y_train, Y_valid = train_test_split(X, Y, 
-                                                              test_size=valid_size)
+                                                              test_size=valid_size,
+                                                              random_state=random_state
+                                                              )
         data_train = [(x, y_to_vector(y)) for x, y in zip(X_train, Y_train)]
         data_valid = [(x, y_to_vector(y)) for x, y in zip(X_valid, Y_valid)]
         data = (data_train, data_valid)
@@ -66,6 +75,7 @@ def y_to_vector(y):
     """Заменяет скаляр вектором в котором 
     на месте индекса=скаляра стоит 1 остальные 
     элементы равны 0.
+
     Пример: y_vec[y]=1 -> y_vec=[0, ..., 0, 1, 0, ..., 0]
     """
     y_vector = np.zeros(10)
@@ -83,6 +93,7 @@ def export_data(file_name, data):
     ----------
     file_name : str
         Название файла в который экспортируются данные.
+
     data : Any(ndarray, df)
         Матрица (n, 2) ,где два столбца индекс примера 
         и предсказанная цифра для примера
