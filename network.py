@@ -18,6 +18,7 @@ from loader import load_train_data, load_test_data, export_data
 
 class Network(object):
     """Многослойный перцептрон с сигмоидной функцией активации.
+    Функция потерь - cross entropy.
     
     Attributes
     ----------
@@ -37,27 +38,30 @@ class Network(object):
     SGD(training_data, eta, epochs, mini_batch_size, test_data=None)
         Обучает нейросеть по алгоритму stochastic gradient descent.
 
-    update_mini_batch(mini_batch, eta)
+    update_mb(mini_batch, eta)
         Обновляет веса и смещения по примерам из mini_batch.
 
     backprop(x, y)
         Алгоритм обратного распространения ошибки.
 
     feedforward(a)
-        Прямой проход через нейросеть. 
+        Вычиляет вектор-результат сети для вектора(единичного примера).
+
+    matrixbase_feedforward(a)
+        Вычиляется вектор-результат сети для матрицы(нескольких примеров).
 
     evaluate(test_data)
         Считает точность сети на тестовых данных(test_data).
-
 
     predict(X)
         Определяет наиболее вероятный класс вектора x из множества X.
     
     сost_deveriate(output, y)
-        Возвращает вектор частный производных dC/da_output.
+        Возвращает вектор частный производных dC/da_output 
+        для функции потерь - cross entropy.
         
     cost_function(x)
-        Считает стоимость сети.
+        Считает функцию потерь - cross entropy.
     """
     def __init__(self, sizes: List[int], random_state=None):
         self.nlayers = len(sizes) 
@@ -244,10 +248,13 @@ class Network(object):
         return np.array(results)
     
     def cost_function(self, output, y):
-        return np.sum(-y*np.log(output)-(1-y)*np.log(1-output))
+        """Возвращает скаляр функции потерь - cross entropy."""
+        return np.sum(np.nan_to_num(-y*np.log(output)-(1-y)*np.log(1-output)))
 
     def cost_derivative(self, output, y):
-        """Возвращает вектор частный производных dC/da_output"""
+        """Возвращает вектор частный производных dC/da_output 
+        для функции потерь cross entropy.
+        """
         return output-y
     
 
