@@ -249,7 +249,7 @@ class Network(object):
     
     def cost_function(self, output, y):
         """Возвращает скаляр функции потерь - cross entropy."""
-        return np.sum(np.nan_to_num(-y*np.log(output)-(1-y)*np.log(1-output)))
+        return np.sum(np.nan_to_num(-y*np.log(output)-(1-y)*np.log(1-output)), axis=0)
 
     def cost_derivative(self, output, y):
         """Возвращает вектор частный производных dC/da_output 
