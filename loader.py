@@ -45,7 +45,7 @@ def load_train_data(file_name: str, valid_size=None,
     df = pd.read_csv(path.join(data_folder, file_name), nrows=nrows)
     X = np.array(df.iloc[:, 1:])
     Y = np.array(df.iloc[:, 0])
-    X = X/256
+    X = X/255
 
     if valid_size != None:
         X_train, X_valid, Y_train, Y_valid = train_test_split(X, Y, 
@@ -65,7 +65,7 @@ def load_test_data(file_name: str, nrows=None):
     Параметры соответсвуют load_train_data.
     """
     df = pd.read_csv(path.join(data_folder, file_name), nrows=nrows)
-    df = np.array(df)/256
+    df = np.array(df)/255
     data = [x for x in df]
 
     return data
