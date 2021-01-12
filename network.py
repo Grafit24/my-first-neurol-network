@@ -106,6 +106,10 @@ class Network(object):
         
         return_results : bool
             Если True возвращает результаты обучения сети.
+
+        monitor_train_evaluate: bool 
+            Если True возвращает результаты обучения для обучающих данных.
+            То есть точность и значение функции потерь.
         """
         self.lmbda = lmbda
         self.n_samples = len(training_data)
