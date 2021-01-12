@@ -127,8 +127,7 @@ class Network(object):
             # Обновляем веса по mini-bunch
             for mini_batch in mini_batches:
                 data = mini_batch
-                x = []
-                y = []
+                x, y = [], []
                 for i in data:
                     x.append(i[0])
                     y.append(i[1])
@@ -153,7 +152,7 @@ class Network(object):
                 
                 text += "with accuracity {0}/{1} = {2}".format(
                     evaluate_result, n_test_data, 
-                    evaluate_result/n_test_data
+                    round(evaluate_result/n_test_data, 4)
                     )
             print(text)
         
@@ -274,10 +273,11 @@ class Network(object):
         return output-y
     
 
-def visualisation(acc, cf, epochs, figsize=(10, 5)):
+def visualisation(acc, cf, figsize=(10, 5)):
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
     fig.set_size_inches(10, 5)
-    ax1.plot(range(1, epochs+1), acc, color="red")
+    epochs = len(acc)
+    ax1.plot(range(1, epochs+1), acc, color="orange")
     ax2.plot(range(1, epochs+1), cf, color="blue")
 
     for ax in (ax1, ax2):
