@@ -75,8 +75,8 @@ class Network(object):
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
     
-    def SGD(self, training_data, eta, epochs, mini_batch_size, 
-            test_data=None, return_results=False):
+    def SGD(self, training_data, eta, epochs, mini_batch_size, lmbda, 
+            test_data=None, return_results=False, monitor_train_evaluate=False):
         """Обучает нейросеть по алгоритму stochastic gradient descent.
 
         В кратце суть алгоритма. Ищем наискорейший спуск к точке минимума cost function 
@@ -107,8 +107,11 @@ class Network(object):
         return_results : bool
             Если True возвращает результаты обучения сети.
         """
-        accuracy_results = []
-        cost_results = []
+        self.lmbda = lmbda
+        self.n_samples = len(training_data)
+
+        accuracy_test, cost_test = [], []
+        accuracy_train, cost_train = [], []
         for epoch in range(epochs):
             np.random.seed(self.random_state)
             rand.shuffle(training_data)
@@ -135,20 +138,25 @@ class Network(object):
             if test_data != None:
                 n_test_data = len(test_data)
 
-                acc_r, cf_r = self.evaluate(test_data)
-                evaluate_result = np.sum(acc_r)
-                accuracy_results.append(evaluate_result/n_test_data)
-                cost = np.mean(cf_r)
-                cost_results.append(cost)
-
+                acc, cost = self.evaluate(test_data)
+                evaluate_result = np.sum(acc)
+                accuracy_test.append(evaluate_result/n_test_data)
+                cost_test.append(cost)
+                if monitor_train_evaluate:
+                    acc_t, cost_t = self.evaluate(training_data)
+                    accuracy_train.append(np.sum(acc_t)/self.n_samples)
+                    cost_train.append(cost_t)
+                
                 text += "with accuracity {0}/{1} = {2}".format(
                     evaluate_result, n_test_data, 
                     evaluate_result/n_test_data
                     )
             print(text)
         
-        if return_results:
-            return accuracy_results, cost_results
+        if return_results and monitor_train_evaluate:
+            return (accuracy_test, cost_test), (accuracy_train, cost_train)
+        elif return_results:
+            return accuracy_test, cost_test
 
     def update_mb(self, x, y, eta):
         """Обновляет веса и смещения по примерам из mini_batch.
@@ -168,8 +176,7 @@ class Network(object):
         nabla_w, nabla_b = self.backprop(x, y)
 
         mb_size = x.shape[1]
-        # вернуть self !
-        self.weights = [w-(eta/mb_size)*nw 
+        self.weights = [(1-eta*(self.lmbda/self.n_samples))*w-(eta/mb_size)*nw 
                         for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b-(eta/mb_size)*nb 
                         for b, nb in zip(self.biases, nabla_b)]
@@ -192,7 +199,8 @@ class Network(object):
             
         # output layer
         delta = self.cost_derivative(activations[-1], y)
-        nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+        l2_prime = (self.lmbda/self.n_samples)*nabla_w[-1]
+        nabla_w[-1] = np.dot(delta, activations[-2].transpose())+l2_prime
         nabla_b[-1] = delta.sum(axis=1)
 
         # hidden layeres
@@ -249,7 +257,11 @@ class Network(object):
     
     def cost_function(self, output, y):
         """Возвращает скаляр функции потерь - cross entropy."""
-        return np.sum(np.nan_to_num(-y*np.log(output)-(1-y)*np.log(1-output)), axis=0)
+        fn = np.sum(np.nan_to_num(-y*np.log(output)-(1-y)*np.log(1-output)), axis=0)
+        fn_mean = np.mean(fn)
+        l2 = 0.5*(self.lmbda/len(output))*sum(
+            np.linalg.norm(w)**2 for w in self.weights)
+        return fn_mean+l2
 
     def cost_derivative(self, output, y):
         """Возвращает вектор частный производных dC/da_output 
