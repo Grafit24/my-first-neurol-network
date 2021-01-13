@@ -69,7 +69,7 @@ class Network(object):
         self.random_state = random_state
 
         rand.seed(random_state)
-        self.weights = [rand.randn(sizes[i+1], sizes[i]) 
+        self.weights = [rand.randn(sizes[i+1], sizes[i])/np.sqrt(sizes[i])
                         for i in range(self.nlayers-1)]
         rand.seed(random_state)
         self.biases = [rand.randn(sizes[i+1]) 
