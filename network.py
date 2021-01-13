@@ -202,8 +202,7 @@ class Network(object):
             
         # output layer
         delta = self.cost_derivative(activations[-1], y)
-        l2_prime = (self.lmbda/self.n_samples)*nabla_w[-1]
-        nabla_w[-1] = np.dot(delta, activations[-2].transpose())+l2_prime
+        nabla_w[-1] = np.dot(delta, activations[-2].transpose())
         nabla_b[-1] = delta.sum(axis=1)
 
         # hidden layeres
