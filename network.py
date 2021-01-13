@@ -261,7 +261,7 @@ class Network(object):
         """Возвращает скаляр функции потерь - cross entropy."""
         fn = np.sum(np.nan_to_num(-y*np.log(output)-(1-y)*np.log(1-output)), axis=0)
         fn_mean = np.mean(fn)
-        l2 = 0.5*(self.lmbda/len(output))*sum(
+        l2 = 0.5*(self.lmbda/output.shape[1])*sum(
             np.linalg.norm(w)**2 for w in self.weights)
         return fn_mean+l2
 
