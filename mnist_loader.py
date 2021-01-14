@@ -43,17 +43,31 @@ def load_train_data(file_name: str, nrows=None):
     
     return data
 
-def load_valid_and_test_data():
+
+def load_test_data(file_name: str, nrows=None):
+    """Загружает тестовые данные с kaggle."""
+    df = pd.read_csv(path.join(data_folder, file_name), nrows=nrows)
+    df = np.array(df)/255
+    data = [x for x in df]
+
+    return data
+
+
+def load_evaluation_data():
     """"Загружает valid и test даынные из файла mnist.pkl.gz"""
     with gzip.open(path.join(data_folder, "mnist.pkl.gz"), "rb") as f:
-        _, valid, test = pickle.load(f, encoding="latin-1")
+        _, valid, test = pickle.load(f, encoding="latin-1"
+        )
+    valid = [(x, y_to_vector(y)) for x, y in zip(*valid)]
+    test = [(x, y_to_vector(y)) for x, y in zip(*test)]
+
     return valid, test
 
 
 def load_mnist_data():
     """Загружает данные: train(из train.csv), valid, test."""
     train = load_train_data("train.csv")
-    valid, test = load_valid_and_test_data()
+    valid, test = load_evaluation_data()
     return train, valid, test
 
 def y_to_vector(y):
