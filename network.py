@@ -33,7 +33,10 @@ class Network(object):
     
     Methods
     -------
-    SGD(training_data, eta, epochs, mini_batch_size, test_data=None)
+    SGD(self, training_data, eta, epochs, mini_batch_size, lmbda, 
+        evaluation_data=None, monitor_evaluation_accuracy=True,
+        monitor_evaluation_cost=False, monitor_training_accuracy=False, 
+        monitor_training_cost=False)
         Обучает нейросеть по алгоритму stochastic gradient descent.
 
     update_mb(mini_batch, eta)
@@ -48,8 +51,8 @@ class Network(object):
     matrixbase_feedforward(a)
         Вычиляется вектор-результат сети для матрицы(нескольких примеров).
 
-    evaluate(test_data)
-        Считает точность сети на тестовых данных(test_data).
+    evaluate(evaluation_data)
+        Считает точность сети на тестовых данных(evaluation_data).
 
     predict(X)
         Определяет наиболее вероятный класс вектора x из множества X.
@@ -74,7 +77,12 @@ class Network(object):
                        for i in range(self.nlayers-1)]
     
     def SGD(self, training_data, eta, epochs, mini_batch_size, lmbda, 
-            test_data=None, return_results=False, monitor_train_evaluate=False):
+            evaluation_data=None,
+            monitor_evaluation_accuracy=True,
+            monitor_evaluation_cost=False, 
+            monitor_training_accuracy=False, 
+            monitor_training_cost=False
+            ):
         """Обучает нейросеть по алгоритму stochastic gradient descent.
 
         В кратце суть алгоритма. Ищем наискорейший спуск к точке минимума cost function 
@@ -89,29 +97,38 @@ class Network(object):
             это список соостоящий из кортежей первый элемент которых 
             вектор x размера входного слоя и вектор y размера выходного слоя.
 
-        eta : int
+        eta : float
             learning rate
 
         epochs : int
 
         mini_batch_size : int
 
-        test_data : List[Tuple[(X, y)]]
+        lmbda : float
+            константа регулиризатора.
+
+        evaluation_data=None : List[Tuple[(X, y)]]
             Если None ,тогда не пишет точность сети 
             после каждой эпохи. В обратном случае 
             соответсвенно пишет. Должен быть тот же вид,
             что и у training_data.
-        
-        return_results : bool
-            Если True возвращает результаты обучения сети.
 
-        monitor_train_evaluate: bool 
-            Если True возвращает результаты обучения для обучающих данных.
-            То есть точность и значение функции потерь.
+        monitor_evaluation_accuracy=True : bool
+            пишет в консоль точность для evaluation_data.
+
+        monitor_evaluation_cost=False : bool
+            пишет в консоль значение потерь для evaluation_data.
+
+        monitor_training_accuracy=False : bool
+            пишет в консоль значение потерь для обучающих данных.
+
+        monitor_training_cost=False : bool
+            пишет в консоль значение потерь для обучающих данных.
         """
         self.lmbda = lmbda
         self.n_samples = len(training_data)
 
+        results = []
         accuracy_test, cost_test = [], []
         accuracy_train, cost_train = [], []
         for epoch in range(epochs):
@@ -135,29 +152,42 @@ class Network(object):
                 self.update_mb(x, y, eta)
             
             # Пишем в консоль точность сети
-            text = "Epoch {0} complete ".format(epoch+1)
-            if test_data != None:
-                n_test_data = len(test_data)
+            text = "Epoch {0} training complete\n".format(epoch+1)
+            if evaluation_data is not None:
+                n_test_data = len(evaluation_data)
 
-                acc, cost = self.evaluate(test_data)
+                acc, cost = self.evaluate(evaluation_data)
                 evaluate_result = np.sum(acc)
                 accuracy_test.append(evaluate_result/n_test_data)
                 cost_test.append(cost)
-                if monitor_train_evaluate:
-                    acc_t, cost_t = self.evaluate(training_data)
-                    accuracy_train.append(np.sum(acc_t)/self.n_samples)
-                    cost_train.append(cost_t)
-                
-                text += "with accuracity {0}/{1} = {2}".format(
-                    evaluate_result, n_test_data, 
-                    round(evaluate_result/n_test_data, 4)
-                    )
+                if monitor_evaluation_accuracy or monitor_evaluation_cost:
+                    text += " evaluation data\n"
+                if monitor_evaluation_accuracy:
+                    text += 4*" " + "| Accuracy: %f \n" % \
+                        (accuracy_test[-1]*100,)
+                if monitor_evaluation_cost:
+                    text += 4*" " + "| Cost:     %f\n" % \
+                        cost_test[-1]
+            if monitor_training_accuracy or monitor_training_cost:
+                acc_t, cost_t = self.evaluate(training_data)
+                accuracy_train.append(np.sum(acc_t)/self.n_samples)
+                cost_train.append(cost_t)
+
+                text += " training data\n"
+                if monitor_training_accuracy:
+                    text += 4*" " + "| Accuracy: %f\n" % \
+                        (accuracy_train[-1]*100,)
+                if monitor_training_cost:
+                    text += 4*" " + "| Cost:     %f\n" % cost_train[-1] 
+
             print(text)
         
-        if return_results and monitor_train_evaluate:
-            return (accuracy_test, cost_test), (accuracy_train, cost_train)
-        elif return_results:
-            return accuracy_test, cost_test
+        if monitor_evaluation_cost:
+            results.append((accuracy_test, cost_test))
+        if monitor_training_cost or monitor_training_accuracy:
+            results.append((accuracy_train, cost_train))
+
+        return tuple(results)
 
     def update_mb(self, x, y, eta):
         """Обновляет веса и смещения по примерам из mini_batch.
@@ -225,13 +255,13 @@ class Network(object):
             a = sigmoid(np.dot(w, a)+b.reshape(-1, 1))
         return a
         
-    def evaluate(self, test_data):
+    def evaluate(self, data):
         """Считает точность и функцию стоимости
-         сети на тестовых данных(test_data).
+         сети на тестовых данных(data).
          """
-        x = [xi for xi, _ in test_data]
+        x = [xi for xi, _ in data]
         x = np.array(x).transpose()
-        y = [yi for _, yi in test_data]
+        y = [yi for _, yi in data]
         y_matrix = np.array(y).transpose()
         y_vector = y_matrix.argmax(axis=0)
 
