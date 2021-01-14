@@ -13,12 +13,10 @@ import numpy as np
 import numpy.random as rand
 import matplotlib.pyplot as plt
 
-from loader import load_train_data, load_test_data, export_data
-
 
 class Network(object):
     """Многослойный перцептрон с сигмоидной функцией активации.
-    Функция потерь - cross entropy.
+    Функция потерь - cross entropy. С использованием L2 регулиризации.
     
     Attributes
     ----------
