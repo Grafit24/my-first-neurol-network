@@ -304,7 +304,7 @@ class Network(object):
 
 def visualisation(acc, cf, figsize=(10, 5)):
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
-    fig.set_size_inches(10, 5)
+    fig.set_size_inches(figsize)
     epochs = len(acc)
     ax1.plot(range(1, epochs+1), acc, color="orange")
     ax2.plot(range(1, epochs+1), cf, color="blue")
