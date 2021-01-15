@@ -183,9 +183,11 @@ class Network(object):
             print(text)
         
         if monitor_evaluation_cost:
-            results.append((accuracy_test, cost_test))
+            results.append(accuracy_test)
+            results.append(cost_test)
         if monitor_training_cost or monitor_training_accuracy:
-            results.append((accuracy_train, cost_train))
+            results.append(accuracy_train)
+            results.append(cost_train)
 
         return tuple(results)
 
