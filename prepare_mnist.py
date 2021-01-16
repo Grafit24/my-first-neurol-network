@@ -51,11 +51,14 @@ test_index = indexer[int(size/2):]
 
 valid = new_full.iloc[valid_index, :]
 test = new_full.iloc[test_index, :]
+new_vt = {"valid":valid, "test":test}
 print("Deleting done!")
 
 # Экспортируем
 print("Exporting new valid and test data...")
-valid.reset_index(drop=True).to_csv("data/mnist_valid.csv")
-test.reset_index(drop=True).to_csv("data/mnist_test.csv")
+for name, data in new_vt.items():
+        data = data.reset_index(drop=True)
+        data.columns = ["label", *data.columns[1:]]
+        data.to_csv("data/mnist_{0}.csv".format(name), index=False)
 print("Export done!")
 

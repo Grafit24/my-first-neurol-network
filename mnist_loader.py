@@ -5,8 +5,6 @@
 Note. Название модуля и export_data немного вводит в диссонанс ,но я не предумал пока 
 другого названия.
 """
-import gzip
-import pickle
 from os import path
 
 import numpy as np
@@ -30,44 +28,50 @@ def load_train_data(file_name: str, nrows=None):
     Returns
     -------
     Tuple or List[ndarray]
-        Возвращает список(train_data) элементы которого 
+        Возвращает список элементы которого 
         это кортежы (x, y) ,где x и y вектора. При этом вектор y
         содержит нули и единицу на месте класса. 
     """
     df = pd.read_csv(path.join(data_folder, file_name), nrows=nrows)
     X = np.array(df.iloc[:, 1:])
     Y = np.array(df.iloc[:, 0])
-    X = X/255
+    X = X/256
 
     data = [(x, y_to_vector(y)) for x, y in zip(X, Y)]
     
     return data
 
 
-def load_test_data(file_name: str, nrows=None):
+def load_test_data(file_name: str):
     """Загружает тестовые данные с kaggle."""
-    df = pd.read_csv(path.join(data_folder, file_name), nrows=nrows)
-    df = np.array(df)/255
+    df = pd.read_csv(path.join(data_folder, file_name))
+    df = np.array(df)/256
     data = [x for x in df]
 
     return data
 
 
-def load_evaluation_data():
+def load_evaluation_data(file_names: list, nrows_list: list=None):
     """"Загружает valid и test даынные из файла mnist.pkl.gz"""
-    with gzip.open(path.join(data_folder, "mnist.pkl.gz"), "rb") as f:
-        _, valid, test = pickle.load(f, encoding="latin-1"
-        )
-    valid = [(x, y_to_vector(y)) for x, y in zip(*valid)]
-    test = [(x, y_to_vector(y)) for x, y in zip(*test)]
+    if nrows_list is None:
+        nrows_list = [None for i in range(len(file_names))]
 
-    return valid, test
+    data_list = []
+    for file_name, nrows in zip(file_names, nrows_list):
+        df = pd.read_csv(path.join(data_folder, file_name), nrows=nrows)
+        X = np.array(df.iloc[:, 1:])
+        Y = np.array(df.iloc[:, 0])
+
+        data = [(x, y_to_vector(y)) for x, y in zip(X, Y)]
+        data_list.append(data)
+
+    return tuple(data_list)
 
 
 def load_mnist_data():
     """Загружает данные: train(из train.csv), valid, test."""
     train = load_train_data("train.csv")
-    valid, test = load_evaluation_data()
+    valid, test = load_evaluation_data(["mnist_valid.csv", "mnist_test.csv"])
     return train, valid, test
 
 def y_to_vector(y):
