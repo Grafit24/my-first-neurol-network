@@ -77,11 +77,13 @@ class Network(object):
                        for i in range(self.nlayers-1)]
     
     def SGD(self, training_data, eta, epochs, mini_batch_size, lmbda, 
+            n_epoch=None,
             evaluation_data=None,
             monitor_evaluation_accuracy=True,
             monitor_evaluation_cost=False, 
             monitor_training_accuracy=False, 
-            monitor_training_cost=False
+            monitor_training_cost=False,
+            monitor_off=False
             ):
         """Обучает нейросеть по алгоритму stochastic gradient descent.
 
@@ -106,6 +108,10 @@ class Network(object):
 
         lmbda : float
             константа регулиризатора.
+        
+        n_epoch=None : int
+            реализуют стратегию no-improvement-in-n epochs. 
+            Если нет улучшений в течение n эпох завершает обучение. 
 
         evaluation_data=None : List[Tuple[(X, y)]]
             Если None ,тогда не пишет точность сети 
@@ -124,9 +130,15 @@ class Network(object):
 
         monitor_training_cost=False : bool
             пишет в консоль значение потерь для обучающих данных.
+
+        monitor_off=False : bool
+            если True перестаёт писать ,что либо в консоль.
         """
         self.lmbda = lmbda
         self.n_samples = len(training_data)
+
+        best_result = 0
+        epoch_ago = 0
 
         results = []
         accuracy_test, cost_test = [], []
@@ -179,9 +191,19 @@ class Network(object):
                         (accuracy_train[-1]*100,)
                 if monitor_training_cost:
                     text += 4*" " + "| Cost:     %f\n" % cost_train[-1] 
-
-            print(text)
+            if not monitor_off:
+                print(text)
         
+            # остановка обучения досрочно.
+            if n_epoch is not None:
+                if accuracy_test[-1] > best_result:
+                    best_result = accuracy_test[-1]
+                    epoch_ago = 0
+                else:
+                    epoch_ago += 1
+
+                if epoch_ago >= n_epoch: break
+            
         if monitor_evaluation_cost:
             results.append(accuracy_test)
             results.append(cost_test)
