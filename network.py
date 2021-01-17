@@ -221,35 +221,32 @@ class Network(object):
 
 
             # Остановка обучения досрочно.
-            if evaluation_data is not None:
-                # no-improvement-in-n-epochs
-                if n_epoch is not None:
-                    if accuracy_test[-1] > self.best_accuracy:
-                        self.best_accuracy = accuracy_test[-1]
-                        epoch_ago = 0
-                    else:
-                        epoch_ago += 1
-
-                    if epoch_ago >= n_epoch:
-                        # Learning shedule by factor
-                        if factor_stop is not None:
-                            if len(accuracy_test) > 1:
-                                if accuracy_test[-1] <= accuracy_test[-2]:
-                                    eta /= factor
-                                    factor_rate += 1
-                                    epoch_ago = 0
-
-                                    text += " learning rate: %f \n" % eta
-
-                            if factor_rate >= factor_stop: break
-                        else:
-                            break
+            if (n_epoch is not None) and (evaluation_data is not None):
+                # no-improvement-in-n
+                if accuracy_test[-1] > self.best_accuracy:
+                    self.best_accuracy = accuracy_test[-1]
+                    epoch_ago = 0
                 else:
-                    self.best_accuracy = max(accuracy_test) 
+                    epoch_ago += 1
+
+                if (epoch_ago >= n_epoch) and (factor_stop is not None):
+                    # Learning shedule by factor
+                    if len(accuracy_test) > 1:
+                            eta /= factor
+                            factor_rate += 1
+                            epoch_ago = 0
+
+                            text += " learning rate: %f \n" % eta
+
+                    if factor_rate >= factor_stop: break
+                else:
+                    break
                 
             if not monitor_off:
                 print(text)
                 
+        self.best_accuracy = max(accuracy_test)
+
         if monitor_evaluation_cost:
             results.append(accuracy_test)
             results.append(cost_test)
