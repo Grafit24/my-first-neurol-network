@@ -6,6 +6,13 @@
 Note. Весь код ниже написан с целью понять ,что творится под "капотом" 
 нейросети. Писался код с опорой на книгу "Neural Networks and Deep Learning" 
 Michael Nielsen'а.
+
+Список улучшений которые я довесил в сравнение с v1:
+- новая функция потерь cross-entropy
+- L2 регулиризация
+- изменил инизилизацию весов
+- no-improvement-in-n-epochs
+- learning shedule(динамическое изменение learning rate'а)
 """
 from typing import List, Tuple
 
@@ -76,8 +83,10 @@ class Network(object):
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
     
-    def SGD(self, training_data, eta, epochs, mini_batch_size, lmbda, 
+    def SGD(self, training_data, eta, epochs, mini_batch_size, 
+            lmbda=0.0, 
             n_epoch=None,
+            factor=(None, None),
             evaluation_data=None,
             monitor_evaluation_accuracy=True,
             monitor_evaluation_cost=False, 
@@ -106,12 +115,18 @@ class Network(object):
 
         mini_batch_size : int
 
-        lmbda : float
+        lmbda=0.0 : float
             константа регулиризатора.
         
         n_epoch=None : int
             реализуют стратегию no-improvement-in-n epochs. 
-            Если нет улучшений в течение n эпох завершает обучение. 
+            Если нет улучшений в течение n эпох ,то:
+            - Если factor = (None, None) ,то заканчивает обучение сети.
+            - Если factor != (None, None) (смотреть factor)
+        
+        factor=(None, None) : Tuple[int]
+            Не действует без n_epochs! Если нет улучщений learning rate/factor[0],
+            пока eta не станет равно 1/(factor[0]^factor[1]).
 
         evaluation_data=None : List[Tuple[(X, y)]]
             Если None ,тогда не пишет точность сети 
@@ -130,6 +145,9 @@ class Network(object):
 
         monitor_training_cost=False : bool
             пишет в консоль значение потерь для обучающих данных.
+        
+        monitor_learning_rate=False : bool
+            пишет в консоль изменения learning rate'а
 
         monitor_off=False : bool
             если True перестаёт писать ,что либо в консоль.
@@ -137,8 +155,11 @@ class Network(object):
         self.lmbda = lmbda
         self.n_samples = len(training_data)
 
-        best_result = 0
+        self.best_accuracy = 0
         epoch_ago = 0
+
+        factor, factor_stop = factor
+        factor_rate = 0
 
         results = []
         accuracy_test, cost_test = [], []
@@ -163,11 +184,11 @@ class Network(object):
                 y = np.array(y).transpose()
                 self.update_mb(x, y, eta)
             
-            # Пишем в консоль точность сети
+            # Данные по точности и cost сети,
+            # а также вывод в консоль.
             text = "Epoch {0} training complete\n".format(epoch+1)
             if evaluation_data is not None:
                 n_test_data = len(evaluation_data)
-
                 acc, cost = self.evaluate(evaluation_data)
                 evaluate_result = np.sum(acc)
                 accuracy_test.append(evaluate_result/n_test_data)
@@ -191,19 +212,38 @@ class Network(object):
                         (accuracy_train[-1]*100,)
                 if monitor_training_cost:
                     text += 4*" " + "| Cost:     %f\n" % cost_train[-1] 
+
+
+            # Остановка обучения досрочно.
+            if evaluation_data is not None:
+                # no-improvement-in-n-epochs
+                if n_epoch is not None:
+                    if accuracy_test[-1] > self.best_accuracy:
+                        self.best_accuracy = accuracy_test[-1]
+                        epoch_ago = 0
+                    else:
+                        epoch_ago += 1
+
+                    if epoch_ago >= n_epoch:
+                        # Learning shedule by factor
+                        if factor_stop is not None:
+                            if len(accuracy_test) > 1:
+                                if accuracy_test[-1] <= accuracy_test[-2]:
+                                    eta /= factor
+                                    factor_rate += 1
+                                    epoch_ago = 0
+
+                                    text += " learning rate: %f \n" % eta
+
+                            if factor_rate >= factor_stop: break
+                        else:
+                            break
+                else:
+                    self.best_accuracy = max(accuracy_test) 
+                
             if not monitor_off:
                 print(text)
-        
-            # остановка обучения досрочно.
-            if n_epoch is not None:
-                if accuracy_test[-1] > best_result:
-                    best_result = accuracy_test[-1]
-                    epoch_ago = 0
-                else:
-                    epoch_ago += 1
-
-                if epoch_ago >= n_epoch: break
-            
+                
         if monitor_evaluation_cost:
             results.append(accuracy_test)
             results.append(cost_test)
