@@ -86,7 +86,7 @@ class Network(object):
     def SGD(self, training_data, eta, epochs, mini_batch_size, 
             lmbda=0.0, 
             n_epoch=None,
-            factor=(None, None),
+            factor=None,
             evaluation_data=None,
             monitor_evaluation_accuracy=True,
             monitor_evaluation_cost=False, 
@@ -124,9 +124,11 @@ class Network(object):
             - Если factor = (None, None) ,то заканчивает обучение сети.
             - Если factor != (None, None) (смотреть factor)
         
-        factor=(None, None) : Tuple[int]
-            Не действует без n_epochs! Если нет улучщений learning rate/factor[0],
-            пока eta не станет равно 1/(factor[0]^factor[1]).
+        factor=None : Tuple[int]
+            Не действует без n_epochs! 
+            (factor, factor_stop)
+            Если нет улучщений learning_rate/factor,
+            пока eta не станет равно eta/(factor^factor_stop).
 
         evaluation_data=None : List[Tuple[(X, y)]]
             Если None ,тогда не пишет точность сети 
@@ -148,6 +150,7 @@ class Network(object):
         
         monitor_learning_rate=False : bool
             пишет в консоль изменения learning rate'а
+            Если factor и n_epochs не None!
 
         monitor_off=False : bool
             если True перестаёт писать ,что либо в консоль.
@@ -157,8 +160,11 @@ class Network(object):
 
         self.best_accuracy = 0
         epoch_ago = 0
-
-        factor, factor_stop = factor
+        
+        if factor is not None: 
+            factor, factor_stop = factor
+        else:
+            factor_stop = None
         factor_rate = 0
 
         results = []
