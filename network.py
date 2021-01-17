@@ -83,7 +83,7 @@ class Network(object):
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
     
-    def SGD(self, training_data, eta, epochs, mini_batch_size, 
+    def SGD(self, training_data, eta, epochs, mini_batch_size,
             lmbda=0.0, 
             n_epoch=None,
             factor=None,
@@ -159,7 +159,7 @@ class Network(object):
         self.n_samples = len(training_data)
 
         self.best_accuracy = 0
-        epoch_ago = 0
+        self.epoch_ago = 0
         
         if factor is not None: 
             factor, factor_stop = factor
@@ -219,28 +219,21 @@ class Network(object):
                 if monitor_training_cost:
                     text += 4*" " + "| Cost:     %f\n" % cost_train[-1] 
 
-
             # Остановка обучения досрочно.
             if (n_epoch is not None) and (evaluation_data is not None):
-                # no-improvement-in-n
-                if accuracy_test[-1] > self.best_accuracy:
-                    self.best_accuracy = accuracy_test[-1]
-                    epoch_ago = 0
-                else:
-                    epoch_ago += 1
+                no_improv = self.no_improvement_in_n(accuracy_test[-1], n=n_epoch)
+                if no_improv:
+                    if factor_stop is not None:
+                        # Learning shedule by factor
+                        eta /= factor
+                        factor_rate += 1
+                        self.epoch_ago = 0
 
-                if (epoch_ago >= n_epoch) and (factor_stop is not None):
-                    # Learning shedule by factor
-                    if len(accuracy_test) > 1:
-                            eta /= factor
-                            factor_rate += 1
-                            epoch_ago = 0
+                        text += " learning rate: %f \n" % eta
 
-                            text += " learning rate: %f \n" % eta
-
-                    if factor_rate >= factor_stop: break
-                else:
-                    break
+                        if factor_rate >= factor_stop: break
+                    else:
+                        break
                 
             if not monitor_off:
                 print(text)
@@ -365,7 +358,15 @@ class Network(object):
         для функции потерь cross entropy.
         """
         return output-y
+    
+    def no_improvement_in_n(self, current_accuracy, n=1):
+        if current_accuracy > self.best_accuracy:
+            self.best_accuracy = current_accuracy
+            self.epoch_ago = 0
+        else:
+            self.epoch_ago += 1
 
+        return self.epoch_ago >= n
 
 def sigmoid(x):
     """Сигмоидная функция"""
