@@ -14,11 +14,10 @@ Michael Nielsen'а.
 - no-improvement-in-n-epochs
 - learning shedule(динамическое изменение learning rate'а)
 """
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import numpy as np
 import numpy.random as rand
-import matplotlib.pyplot as plt
 
 
 class Network(object):
@@ -40,10 +39,13 @@ class Network(object):
     
     Methods
     -------
-    SGD(self, training_data, eta, epochs, mini_batch_size, lmbda, 
-        evaluation_data=None, monitor_evaluation_accuracy=True,
-        monitor_evaluation_cost=False, monitor_training_accuracy=False, 
-        monitor_training_cost=False)
+    set_monitoring(evaluation_accuracy=False, evaluation_cost=False, 
+                   training_accuracy=False, training_cost=False, 
+                   learning_rate=False, off=False)
+        Настраивает отображение данных при обучении сети.
+
+    SGD(self, training_data, eta, epochs, mini_batch_size, 
+        evaluation_data=None, lmbda=0.0, n_epoch=None, factor=None)
         Обучает нейросеть по алгоритму stochastic gradient descent.
 
     update_mb(mini_batch, eta)
@@ -70,11 +72,17 @@ class Network(object):
         
     cost_function(x)
         Считает функцию потерь - cross entropy.
+    
+    no_improvement_in_n(current_accuracy, n=1)
+        Если сеть не улучшает результаты accuracy 
+        в течение n epoch возвращает True.
     """
     def __init__(self, sizes: List[int], random_state=None):
         self.nlayers = len(sizes) 
         self.sizes = sizes
         self.random_state = random_state
+
+        self.set_monitoring(evaluation_accuracy=True)
 
         rand.seed(random_state)
         self.weights = [rand.randn(sizes[i+1], sizes[i])/np.sqrt(sizes[i])
@@ -83,16 +91,39 @@ class Network(object):
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
     
-    def SGD(self, training_data, eta, epochs, mini_batch_size,
-            lmbda=0.0, 
-            n_epoch=None,
-            factor=None,
-            evaluation_data=None,
-            monitor_evaluation_accuracy=True,
-            monitor_evaluation_cost=False, 
-            monitor_training_accuracy=False, 
-            monitor_training_cost=False,
-            monitor_off=False
+    def set_monitoring(self, evaluation_accuracy=False, evaluation_cost=False, 
+            training_accuracy=False, training_cost=False, 
+            learning_rate=False, off=False):
+        """Настраивает отображение данных при обучение сети.
+        
+        Parameters
+        ----------
+        evaluation_accuracy=False : bool
+        evaluation_cost=False : bool
+            пишет в консоль точность для evaluation_data.
+
+        training_accuracy=False : bool
+        training_cost=False : bool
+            пишет в консоль значение потерь для обучающих данных.
+        
+        learning_rate=False : bool
+            пишет в консоль изменения learning rate'а.
+            Если factor и n_epochs не None!
+
+        off=False : bool
+            если True перестаёт писать ,что либо в консоль.
+        """
+        self.monitor = {"evaluation_accuracy":evaluation_accuracy,
+                        "evaluation_cost": evaluation_cost,
+                        "training_accuracy":training_accuracy,
+                        "training_cost":training_cost,
+                        "learning_rate":learning_rate,
+                        "off":off,
+                        }
+
+    
+    def SGD(self, training_data, eta, epochs, mini_batch_size, 
+            evaluation_data=None, lmbda=0.0, n_epoch=None, factor=None,
             ):
         """Обучает нейросеть по алгоритму stochastic gradient descent.
 
@@ -115,45 +146,25 @@ class Network(object):
 
         mini_batch_size : int
 
-        lmbda=0.0 : float
-            константа регулиризатора.
-        
-        n_epoch=None : int
-            реализуют стратегию no-improvement-in-n epochs. 
-            Если нет улучшений в течение n эпох ,то:
-            - Если factor = (None, None) ,то заканчивает обучение сети.
-            - Если factor != (None, None) (смотреть factor)
-        
-        factor=None : Tuple[int]
-            Не действует без n_epochs! 
-            (factor, factor_stop)
-            Если нет улучщений learning_rate/factor,
-            пока eta не станет равно eta/(factor^factor_stop).
-
         evaluation_data=None : List[Tuple[(X, y)]]
             Если None ,тогда не пишет точность сети 
             после каждой эпохи. В обратном случае 
             соответсвенно пишет. Должен быть тот же вид,
             что и у training_data.
 
-        monitor_evaluation_accuracy=True : bool
-            пишет в консоль точность для evaluation_data.
-
-        monitor_evaluation_cost=False : bool
-            пишет в консоль значение потерь для evaluation_data.
-
-        monitor_training_accuracy=False : bool
-            пишет в консоль значение потерь для обучающих данных.
-
-        monitor_training_cost=False : bool
-            пишет в консоль значение потерь для обучающих данных.
+        lmbda=0.0 : float
+            константа регулиризатора.
         
-        monitor_learning_rate=False : bool
-            пишет в консоль изменения learning rate'а
-            Если factor и n_epochs не None!
-
-        monitor_off=False : bool
-            если True перестаёт писать ,что либо в консоль.
+        n_epoch=None : int
+            реализуют стратегию no-improvement-in-n epochs. 
+            Если нет улучшений в течение n эпох ,то:
+            - Если factor = None ,то заканчивает обучение сети.
+            - Если factor != None (смотреть factor)
+        
+        factor=None : Tuple[int]
+            Не действует без n_epochs! 
+            (factor, factor_stop) Если нет улучщений learning_rate/factor,
+            пока eta не станет равно eta/(factor^factor_stop).
         """
         self.lmbda = lmbda
         self.n_samples = len(training_data)
@@ -199,24 +210,24 @@ class Network(object):
                 evaluate_result = np.sum(acc)
                 accuracy_test.append(evaluate_result/n_test_data)
                 cost_test.append(cost)
-                if monitor_evaluation_accuracy or monitor_evaluation_cost:
+                if self.monitor["evaluation_accuracy"] or self.monitor["evaluation_cost"]:
                     text += " evaluation data\n"
-                if monitor_evaluation_accuracy:
+                if self.monitor["evaluation_accuracy"]:
                     text += 4*" " + "| Accuracy: %f \n" % \
                         (accuracy_test[-1]*100,)
-                if monitor_evaluation_cost:
+                if self.monitor["evaluation_cost"]:
                     text += 4*" " + "| Cost:     %f\n" % \
                         cost_test[-1]
-            if monitor_training_accuracy or monitor_training_cost:
+            if self.monitor["training_accuracy"] or self.monitor["training_cost"]:
                 acc_t, cost_t = self.evaluate(training_data)
                 accuracy_train.append(np.sum(acc_t)/self.n_samples)
                 cost_train.append(cost_t)
 
                 text += " training data\n"
-                if monitor_training_accuracy:
+                if self.monitor["training_accuracy"]:
                     text += 4*" " + "| Accuracy: %f\n" % \
                         (accuracy_train[-1]*100,)
-                if monitor_training_cost:
+                if self.monitor["training_cost"]:
                     text += 4*" " + "| Cost:     %f\n" % cost_train[-1] 
 
             # Остановка обучения досрочно.
@@ -229,21 +240,22 @@ class Network(object):
                         factor_rate += 1
                         self.epoch_ago = 0
 
-                        text += " learning rate: %f \n" % eta
+                        if self.monitor["learning_rate"]:
+                            text += " learning rate: %f \n" % eta
 
                         if factor_rate >= factor_stop: break
                     else:
                         break
                 
-            if not monitor_off:
+            if not self.monitor["off"]:
                 print(text)
                 
         self.best_accuracy = max(accuracy_test)
 
-        if monitor_evaluation_cost:
+        if evaluation_data is not None:
             results.append(accuracy_test)
             results.append(cost_test)
-        if monitor_training_cost or monitor_training_accuracy:
+        if self.monitor["training_cost"] or self.monitor["training_accuracy"]:
             results.append(accuracy_train)
             results.append(cost_train)
 
@@ -360,6 +372,9 @@ class Network(object):
         return output-y
     
     def no_improvement_in_n(self, current_accuracy, n=1):
+        """Если сеть не улучшает результаты accuracy 
+        в течение n epoch возвращает True.
+        """
         if current_accuracy > self.best_accuracy:
             self.best_accuracy = current_accuracy
             self.epoch_ago = 0
