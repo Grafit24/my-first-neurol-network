@@ -170,7 +170,7 @@ class Network(object):
         self.n_samples = len(training_data)
 
         self.best_accuracy = 0
-        self.epoch_ago = 0
+        self._epoch_ago = 0
         
         if factor is not None: 
             factor, factor_stop = factor
@@ -178,9 +178,8 @@ class Network(object):
             factor_stop = None
         factor_rate = 0
 
-        results = []
-        accuracy_test, cost_test = [], []
-        accuracy_train, cost_train = [], []
+        self.accuracy_test, self.cost_test = [], []
+        self.accuracy_train, self.cost_train = [], []
         for epoch in range(epochs):
             np.random.seed(self.random_state)
             rand.shuffle(training_data)
@@ -201,65 +200,36 @@ class Network(object):
                 y = np.array(y).transpose()
                 self.update_mb(x, y, eta)
             
-            # Данные по точности и cost сети,
-            # а также вывод в консоль.
-            text = "Epoch {0} training complete\n".format(epoch+1)
+            # Получаес данные по точности и потерям сети.
             if evaluation_data is not None:
-                n_test_data = len(evaluation_data)
                 acc, cost = self.evaluate(evaluation_data)
-                evaluate_result = np.sum(acc)
-                accuracy_test.append(evaluate_result/n_test_data)
-                cost_test.append(cost)
-                if self.monitor["evaluation_accuracy"] or self.monitor["evaluation_cost"]:
-                    text += " evaluation data\n"
-                if self.monitor["evaluation_accuracy"]:
-                    text += 4*" " + "| Accuracy: %f \n" % \
-                        (accuracy_test[-1]*100,)
-                if self.monitor["evaluation_cost"]:
-                    text += 4*" " + "| Cost:     %f\n" % \
-                        cost_test[-1]
+                self.accuracy_test.append(np.sum(acc)/len(evaluation_data))
+                self.cost_test.append(cost)
+
             if self.monitor["training_accuracy"] or self.monitor["training_cost"]:
                 acc_t, cost_t = self.evaluate(training_data)
-                accuracy_train.append(np.sum(acc_t)/self.n_samples)
-                cost_train.append(cost_t)
-
-                text += " training data\n"
-                if self.monitor["training_accuracy"]:
-                    text += 4*" " + "| Accuracy: %f\n" % \
-                        (accuracy_train[-1]*100,)
-                if self.monitor["training_cost"]:
-                    text += 4*" " + "| Cost:     %f\n" % cost_train[-1] 
+                self.accuracy_train.append(np.sum(acc_t)/self.n_samples)
+                self.cost_train.append(cost_t) 
 
             # Остановка обучения досрочно.
             if (n_epoch is not None) and (evaluation_data is not None):
-                no_improv = self.no_improvement_in_n(accuracy_test[-1], n=n_epoch)
+                no_improv = self.no_improvement_in_n(self.accuracy_test[-1], n=n_epoch)
                 if no_improv:
                     if factor_stop is not None:
                         # Learning shedule by factor
                         eta /= factor
                         factor_rate += 1
-                        self.epoch_ago = 0
-
-                        if self.monitor["learning_rate"]:
-                            text += " learning rate: %f \n" % eta
+                        self._epoch_ago = 0
 
                         if factor_rate >= factor_stop: break
                     else:
                         break
-                
+            
+            # Выводим данные за цикл в консоль
             if not self.monitor["off"]:
-                print(text)
+                self.print_monitoring_data(epoch, learning_rate=eta)
                 
-        self.best_accuracy = max(accuracy_test)
-
-        if evaluation_data is not None:
-            results.append(accuracy_test)
-            results.append(cost_test)
-        if self.monitor["training_cost"] or self.monitor["training_accuracy"]:
-            results.append(accuracy_train)
-            results.append(cost_train)
-
-        return tuple(results)
+        self.best_accuracy = max(self.accuracy_test)
 
     def update_mb(self, x, y, eta):
         """Обновляет веса и смещения по примерам из mini_batch.
@@ -377,11 +347,37 @@ class Network(object):
         """
         if current_accuracy > self.best_accuracy:
             self.best_accuracy = current_accuracy
-            self.epoch_ago = 0
+            self._epoch_ago = 0
         else:
-            self.epoch_ago += 1
+            self._epoch_ago += 1
 
-        return self.epoch_ago >= n
+        return self._epoch_ago >= n
+    
+    def print_monitoring_data(self, epoch, learning_rate=None):
+        text = "Epoch {0} training complete\n".format(epoch+1)
+        # learning_rate
+        if self.monitor["learning_rate"]:
+            text += "---learning rate=%f---\n" % learning_rate
+        # evaluation monitoring
+        if self.monitor["evaluation_accuracy"] or\
+           self.monitor["evaluation_cost"]:
+            text += " evaluation data\n"
+            if self.monitor["evaluation_accuracy"]:
+                text += 4*" " + "| Accuracy: %f \n" % (self.accuracy_test[-1]*100)
+            if self.monitor["evaluation_cost"]:
+                text += 4*" " + "| Cost:     %f\n" % self.cost_test[-1]
+        # training monitoring
+        if self.monitor["training_accuracy"] or\
+           self.monitor["training_cost"]:
+            text += " training data\n"
+            if self.monitor["training_accuracy"]:
+                text += 4*" " + "| Accuracy: %f\n" % \
+                    (self.accuracy_train[-1]*100)
+            if self.monitor["training_cost"]:
+                text += 4*" " + "| Cost:     %f\n" % self.cost_train[-1]
+
+        print(text)
+
 
 def sigmoid(x):
     """Сигмоидная функция"""
