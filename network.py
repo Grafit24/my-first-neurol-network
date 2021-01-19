@@ -14,6 +14,8 @@ Michael Nielsen'а.
 - no-improvement-in-n-epochs
 - learning shedule(динамическое изменение learning rate'а)
 """
+import pickle
+import json
 from typing import List, Tuple, Dict
 
 import numpy as np
@@ -166,8 +168,14 @@ class Network(object):
             (factor, factor_stop) Если нет улучщений learning_rate/factor,
             пока eta не станет равно eta/(factor^factor_stop).
         """
+        self.eta = eta
         self.lmbda = lmbda
+        self.epochs = epochs
+        self.n_epoch = n_epoch
+        self.factor = factor
+        self.mini_batch_size = mini_batch_size
         self.n_samples = len(training_data)
+        self.n_samples_test = len(evaluation_data)
 
         self.best_accuracy = 0
         self._epoch_ago = 0
@@ -377,7 +385,17 @@ class Network(object):
                 text += 4*" " + "| Cost:     %f\n" % self.cost_train[-1]
 
         print(text)
+    
+    def save_pickle(self, file_name):
+        """"Сохраняет сеть ,как pickle файл."""
+        with open(file_name, "wb") as f:
+            pickle.dump(self, f)
 
+def load_pickle(file_name):
+    """Заружает pickle файл"""
+    with open(file_name, "rb") as f:
+        obj = pickle.load(f)
+    return obj
 
 def sigmoid(x):
     """Сигмоидная функция"""
