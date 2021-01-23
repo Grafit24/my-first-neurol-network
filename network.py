@@ -6,19 +6,26 @@
 Note. Весь код ниже написан с целью понять ,что творится под "капотом" 
 нейросети. Писался код с опорой на книгу "Neural Networks and Deep Learning" 
 Michael Nielsen'а.
+
+Список улучшений которые я довесил в сравнение с v1:
+- новая функция потерь cross-entropy
+- L2 регулиризация
+- изменил инизилизацию весов
+- no-improvement-in-n-epochs
+- learning shedule(динамическое изменение learning rate'а)
 """
-from typing import List, Tuple
+import os
+import pickle
+import json
+from typing import List, Tuple, Dict
 
 import numpy as np
 import numpy.random as rand
-import matplotlib.pyplot as plt
-
-from loader import load_train_data, load_test_data, export_data
 
 
 class Network(object):
     """Многослойный перцептрон с сигмоидной функцией активации.
-    Функция потерь - cross entropy.
+    Функция потерь - cross entropy. С использованием L2 регулиризации.
     
     Attributes
     ----------
@@ -35,7 +42,13 @@ class Network(object):
     
     Methods
     -------
-    SGD(training_data, eta, epochs, mini_batch_size, test_data=None)
+    set_monitoring(evaluation_accuracy=False, evaluation_cost=False, 
+                   training_accuracy=False, training_cost=False, 
+                   learning_rate=False, off=False)
+        Настраивает отображение данных при обучении сети.
+
+    SGD(self, training_data, eta, epochs, mini_batch_size, 
+        evaluation_data=None, lmbda=0.0, n_epoch=None, factor=None)
         Обучает нейросеть по алгоритму stochastic gradient descent.
 
     update_mb(mini_batch, eta)
@@ -50,8 +63,8 @@ class Network(object):
     matrixbase_feedforward(a)
         Вычиляется вектор-результат сети для матрицы(нескольких примеров).
 
-    evaluate(test_data)
-        Считает точность сети на тестовых данных(test_data).
+    evaluate(evaluation_data)
+        Считает точность сети на тестовых данных(evaluation_data).
 
     predict(X)
         Определяет наиболее вероятный класс вектора x из множества X.
@@ -62,21 +75,60 @@ class Network(object):
         
     cost_function(x)
         Считает функцию потерь - cross entropy.
+    
+    no_improvement_in_n(current_accuracy, n=1)
+        Если сеть не улучшает результаты accuracy 
+        в течение n epoch возвращает True.
     """
     def __init__(self, sizes: List[int], random_state=None):
-        self.nlayers = len(sizes) 
+        self.nlayers = len(sizes)
         self.sizes = sizes
         self.random_state = random_state
+        self.cost_func = "cross-entropy"
+
+        self.set_monitoring(evaluation_accuracy=True)
 
         rand.seed(random_state)
-        self.weights = [rand.randn(sizes[i+1], sizes[i]) 
+        self.weights = [rand.randn(sizes[i+1], sizes[i])/np.sqrt(sizes[i])
                         for i in range(self.nlayers-1)]
         rand.seed(random_state)
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
     
+    def set_monitoring(self, evaluation_accuracy=False, evaluation_cost=False, 
+            training_accuracy=False, training_cost=False, 
+            learning_rate=False, off=False):
+        """Настраивает отображение данных при обучение сети.
+        
+        Parameters
+        ----------
+        evaluation_accuracy=False : bool
+        evaluation_cost=False : bool
+            пишет в консоль точность для evaluation_data.
+
+        training_accuracy=False : bool
+        training_cost=False : bool
+            пишет в консоль значение потерь для обучающих данных.
+        
+        learning_rate=False : bool
+            пишет в консоль изменения learning rate'а.
+            Если factor и n_epochs не None!
+
+        off=False : bool
+            если True перестаёт писать ,что либо в консоль.
+        """
+        self.monitor = {"evaluation_accuracy":evaluation_accuracy,
+                        "evaluation_cost": evaluation_cost,
+                        "training_accuracy":training_accuracy,
+                        "training_cost":training_cost,
+                        "learning_rate":learning_rate,
+                        "off":off,
+                        }
+
+    
     def SGD(self, training_data, eta, epochs, mini_batch_size, 
-            test_data=None, return_results=False):
+            evaluation_data=None, lmbda=0.0, n_epoch=None, factor=None,
+            ):
         """Обучает нейросеть по алгоритму stochastic gradient descent.
 
         В кратце суть алгоритма. Ищем наискорейший спуск к точке минимума cost function 
@@ -91,24 +143,53 @@ class Network(object):
             это список соостоящий из кортежей первый элемент которых 
             вектор x размера входного слоя и вектор y размера выходного слоя.
 
-        eta : int
+        eta : float
             learning rate
 
         epochs : int
 
         mini_batch_size : int
 
-        test_data : List[Tuple[(X, y)]]
+        evaluation_data=None : List[Tuple[(X, y)]]
             Если None ,тогда не пишет точность сети 
             после каждой эпохи. В обратном случае 
             соответсвенно пишет. Должен быть тот же вид,
             что и у training_data.
+
+        lmbda=0.0 : float
+            константа регулиризатора.
         
-        return_results : bool
-            Если True возвращает результаты обучения сети.
+        n_epoch=None : int
+            реализуют стратегию no-improvement-in-n epochs. 
+            Если нет улучшений в течение n эпох ,то:
+            - Если factor = None ,то заканчивает обучение сети.
+            - Если factor != None (смотреть factor)
+        
+        factor=None : Tuple[int]
+            Не действует без n_epochs! 
+            (factor, factor_stop) Если нет улучщений learning_rate/factor,
+            пока eta не станет равно eta/(factor^factor_stop).
         """
-        accuracy_results = []
-        cost_results = []
+        self.eta = eta
+        self.lmbda = lmbda
+        self.epochs = epochs
+        self.n_epoch = n_epoch
+        self.factor = factor
+        self.mini_batch_size = mini_batch_size
+        self.n_samples = len(training_data)
+        self.n_samples_test = len(evaluation_data)
+
+        self.best_accuracy = 0
+        self._epoch_ago = 0
+        
+        if factor is not None: 
+            factor, factor_stop = factor
+        else:
+            factor_stop = None
+        factor_rate = 0
+
+        self.accuracy_test, self.cost_test = [], []
+        self.accuracy_train, self.cost_train = [], []
         for epoch in range(epochs):
             np.random.seed(self.random_state)
             rand.shuffle(training_data)
@@ -120,8 +201,7 @@ class Network(object):
             # Обновляем веса по mini-bunch
             for mini_batch in mini_batches:
                 data = mini_batch
-                x = []
-                y = []
+                x, y = [], []
                 for i in data:
                     x.append(i[0])
                     y.append(i[1])
@@ -130,25 +210,36 @@ class Network(object):
                 y = np.array(y).transpose()
                 self.update_mb(x, y, eta)
             
-            # Пишем в консоль точность сети
-            text = "Epoch {0} complete ".format(epoch+1)
-            if test_data != None:
-                n_test_data = len(test_data)
+            # Получаес данные по точности и потерям сети.
+            if evaluation_data is not None:
+                acc, cost = self.evaluate(evaluation_data)
+                self.accuracy_test.append(np.sum(acc)/len(evaluation_data))
+                self.cost_test.append(cost)
 
-                acc_r, cf_r = self.evaluate(test_data)
-                evaluate_result = np.sum(acc_r)
-                accuracy_results.append(evaluate_result/n_test_data)
-                cost = np.mean(cf_r)
-                cost_results.append(cost)
+            if self.monitor["training_accuracy"] or self.monitor["training_cost"]:
+                acc_t, cost_t = self.evaluate(training_data)
+                self.accuracy_train.append(np.sum(acc_t)/self.n_samples)
+                self.cost_train.append(cost_t) 
 
-                text += "with accuracity {0}/{1} = {2}".format(
-                    evaluate_result, n_test_data, 
-                    evaluate_result/n_test_data
-                    )
-            print(text)
-        
-        if return_results:
-            return accuracy_results, cost_results
+            # Остановка обучения досрочно.
+            if (n_epoch is not None) and (evaluation_data is not None):
+                no_improv = self.no_improvement_in_n(self.accuracy_test[-1], n=n_epoch)
+                if no_improv:
+                    if factor_stop is not None:
+                        # Learning shedule by factor
+                        eta /= factor
+                        factor_rate += 1
+                        self._epoch_ago = 0
+
+                        if factor_rate >= factor_stop: break
+                    else:
+                        break
+            
+            # Выводим данные за цикл в консоль
+            if not self.monitor["off"]:
+                self.print_monitoring_data(epoch, learning_rate=eta)
+                
+        self.best_accuracy = max(self.accuracy_test)
 
     def update_mb(self, x, y, eta):
         """Обновляет веса и смещения по примерам из mini_batch.
@@ -168,8 +259,7 @@ class Network(object):
         nabla_w, nabla_b = self.backprop(x, y)
 
         mb_size = x.shape[1]
-        # вернуть self !
-        self.weights = [w-(eta/mb_size)*nw 
+        self.weights = [(1-eta*(self.lmbda/self.n_samples))*w-(eta/mb_size)*nw 
                         for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b-(eta/mb_size)*nb 
                         for b, nb in zip(self.biases, nabla_b)]
@@ -217,13 +307,13 @@ class Network(object):
             a = sigmoid(np.dot(w, a)+b.reshape(-1, 1))
         return a
         
-    def evaluate(self, test_data):
+    def evaluate(self, data):
         """Считает точность и функцию стоимости
-         сети на тестовых данных(test_data).
+         сети на тестовых данных(data).
          """
-        x = [xi for xi, _ in test_data]
+        x = [xi for xi, _ in data]
         x = np.array(x).transpose()
-        y = [yi for _, yi in test_data]
+        y = [yi for _, yi in data]
         y_matrix = np.array(y).transpose()
         y_vector = y_matrix.argmax(axis=0)
 
@@ -249,7 +339,11 @@ class Network(object):
     
     def cost_function(self, output, y):
         """Возвращает скаляр функции потерь - cross entropy."""
-        return np.sum(np.nan_to_num(-y*np.log(output)-(1-y)*np.log(1-output)), axis=0)
+        fn = np.sum(np.nan_to_num(-y*np.log(output)-(1-y)*np.log(1-output)), axis=0)
+        fn_mean = np.mean(fn)
+        l2 = 0.5*(self.lmbda/output.shape[1])*sum(
+            np.linalg.norm(w)**2 for w in self.weights)
+        return fn_mean+l2
 
     def cost_derivative(self, output, y):
         """Возвращает вектор частный производных dC/da_output 
@@ -257,22 +351,89 @@ class Network(object):
         """
         return output-y
     
+    def no_improvement_in_n(self, current_accuracy, n=1):
+        """Если сеть не улучшает результаты accuracy 
+        в течение n epoch возвращает True.
+        """
+        if current_accuracy > self.best_accuracy:
+            self.best_accuracy = current_accuracy
+            self._epoch_ago = 0
+        else:
+            self._epoch_ago += 1
 
-def visualisation(acc, cf, epochs, figsize=(10, 5)):
-    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2)
-    fig.set_size_inches(10, 5)
-    ax1.plot(range(1, epochs+1), acc, color="red")
-    ax2.plot(range(1, epochs+1), cf, color="blue")
+        return self._epoch_ago >= n
+    
+    def print_monitoring_data(self, epoch, learning_rate=None):
+        text = "Epoch {0} training complete\n".format(epoch+1)
+        # learning_rate
+        if self.monitor["learning_rate"]:
+            text += "---learning rate=%f---\n" % learning_rate
+        # evaluation monitoring
+        if self.monitor["evaluation_accuracy"] or\
+           self.monitor["evaluation_cost"]:
+            text += " evaluation data\n"
+            if self.monitor["evaluation_accuracy"]:
+                text += 4*" " + "| Accuracy: %f \n" % (self.accuracy_test[-1]*100)
+            if self.monitor["evaluation_cost"]:
+                text += 4*" " + "| Cost:     %f\n" % self.cost_test[-1]
+        # training monitoring
+        if self.monitor["training_accuracy"] or\
+           self.monitor["training_cost"]:
+            text += " training data\n"
+            if self.monitor["training_accuracy"]:
+                text += 4*" " + "| Accuracy: %f\n" % \
+                    (self.accuracy_train[-1]*100)
+            if self.monitor["training_cost"]:
+                text += 4*" " + "| Cost:     %f\n" % self.cost_train[-1]
 
-    for ax in (ax1, ax2):
-        ax.spines["right"].set_visible(False)    
-        ax.spines["top"].set_visible(False)
-        ax.tick_params(bottom=False, left=False)
+        print(text)
+    
+    def save_pickle(self, file_name, to_folder=True):
+        """"Сохраняет сеть ,как pickle файл."""
+        if to_folder:
+            path = get_saves_path("pickle")
+            file_name = os.path.join(path, file_name)
+
+        with open(file_name, "wb") as f:
+            pickle.dump(self, f)
+    
+    def save_json(self, file_name, to_folder=True, *additional):
+        """"Сохраняет сеть ,как json файл."""
+        if to_folder:
+            path = get_saves_path("json")
+            file_name = os.path.join(path, file_name)
         
-    ax1.set_title("Accuracy")
-    ax2.set_title("Mean cost function")
+        obj = {
+            "sizes":self.sizes,
+            "weights":[w.tolist() for w in self.weights],
+            "biases":[b.tolist() for b in self.biases],
+            "cost":self.cost_func
+        }
+        with open(file_name, "w") as f:
+            json.dump(obj, f)
 
-    plt.show() 
+def load_pickle(file_name, from_folder=True):
+    """Заружает pickle файл"""
+    if from_folder:
+            path = get_saves_path("pickle")
+            file_name = os.path.join(path, file_name)
+
+    with open(file_name, "rb") as f:
+        obj = pickle.load(f)
+
+    return obj
+
+
+def load_json(file_name, from_folder=True):
+    """Загружает json файл."""
+    if from_folder:
+        path = get_saves_path("json")
+        file_name = os.path.join(path, file_name)
+    
+    with open(file_name, "r") as f:
+        obj = json.load(f)
+
+    return obj
 
 
 def sigmoid(x):
@@ -284,3 +445,12 @@ def sigmoid_prime(x):
     """Производная сигмойдной функции"""
     sigm = sigmoid(x)
     return (1. - sigm)*sigm
+
+def get_saves_path(file_extension):
+    dirname = os.path.dirname(__file__)
+    root, folder = os.path.split(dirname)
+    if folder != "src":
+        path = os.path.join(dirname, "saves", file_extension)
+    else:
+        path = os.path.join(root, "saves", file_extension)
+    return path
