@@ -14,6 +14,7 @@ Michael Nielsen'а.
 - no-improvement-in-n-epochs
 - learning shedule(динамическое изменение learning rate'а)
 """
+import os
 import pickle
 import json
 from typing import List, Tuple, Dict
@@ -80,9 +81,10 @@ class Network(object):
         в течение n epoch возвращает True.
     """
     def __init__(self, sizes: List[int], random_state=None):
-        self.nlayers = len(sizes) 
+        self.nlayers = len(sizes)
         self.sizes = sizes
         self.random_state = random_state
+        self.cost_func = "cross-entropy"
 
         self.set_monitoring(evaluation_accuracy=True)
 
@@ -386,16 +388,53 @@ class Network(object):
 
         print(text)
     
-    def save_pickle(self, file_name):
+    def save_pickle(self, file_name, to_folder=True):
         """"Сохраняет сеть ,как pickle файл."""
+        if to_folder:
+            path = get_saves_path("pickle")
+            file_name = os.path.join(path, file_name)
+
         with open(file_name, "wb") as f:
             pickle.dump(self, f)
+    
+    def save_json(self, file_name, to_folder=True, *additional):
+        """"Сохраняет сеть ,как json файл."""
+        if to_folder:
+            path = get_saves_path("json")
+            file_name = os.path.join(path, file_name)
+        
+        obj = {
+            "sizes":self.sizes,
+            "weights":[w.tolist() for w in self.weights],
+            "biases":[b.tolist() for b in self.biases],
+            "cost":self.cost_func
+        }
+        with open(file_name, "w") as f:
+            json.dump(obj, f)
 
-def load_pickle(file_name):
+def load_pickle(file_name, from_folder=True):
     """Заружает pickle файл"""
+    if from_folder:
+            path = get_saves_path("pickle")
+            file_name = os.path.join(path, file_name)
+
     with open(file_name, "rb") as f:
         obj = pickle.load(f)
+
     return obj
+
+
+def load_json(file_name, from_folder=True):
+    """Загружает json файл."""
+    if from_folder:
+        path = get_saves_path("json")
+        file_name = os.path.join(path, file_name)
+    
+    with open(file_name, "r") as f:
+        obj = json.load(f)
+
+    return obj
+
 
 def sigmoid(x):
     """Сигмоидная функция"""
@@ -406,3 +445,12 @@ def sigmoid_prime(x):
     """Производная сигмойдной функции"""
     sigm = sigmoid(x)
     return (1. - sigm)*sigm
+
+def get_saves_path(file_extension):
+    dirname = os.path.dirname(__file__)
+    root, folder = os.path.split(dirname)
+    if folder != "src":
+        path = os.path.join(dirname, "saves", file_extension)
+    else:
+        path = os.path.join(root, "saves", file_extension)
+    return path
