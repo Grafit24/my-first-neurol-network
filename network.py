@@ -94,6 +94,9 @@ class Network(object):
         rand.seed(random_state)
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
+        rand.seed(random_state)                       
+        self.velocities = [[np.zeros_like(w), np.zeros_like(b)]
+            for w, b in zip(self.weights, self.biases)]
     
     def set_monitoring(self, evaluation_accuracy=False, evaluation_cost=False, 
             training_accuracy=False, training_cost=False, 
@@ -127,7 +130,7 @@ class Network(object):
 
     
     def SGD(self, training_data, eta, epochs, mini_batch_size, 
-            evaluation_data=None, lmbda=0.0, n_epoch=None, factor=None,
+            evaluation_data=None, lmbda=0.0, mu=0.0, n_epoch=None, factor=None,
             ):
         """Обучает нейросеть по алгоритму stochastic gradient descent.
 
@@ -172,6 +175,7 @@ class Network(object):
         """
         self.eta = eta
         self.lmbda = lmbda
+        self.mu = mu
         self.epochs = epochs
         self.n_epoch = n_epoch
         self.factor = factor
@@ -208,7 +212,7 @@ class Network(object):
 
                 x = np.array(x).transpose()
                 y = np.array(y).transpose()
-                self.update_mb(x, y, eta)
+                self.update_mb(x, y, eta, mu)
             
             # Получаес данные по точности и потерям сети.
             if evaluation_data is not None:
@@ -241,7 +245,7 @@ class Network(object):
                 
         self.best_accuracy = max(self.accuracy_test)
 
-    def update_mb(self, x, y, eta):
+    def update_mb(self, x, y, eta, mu):
         """Обновляет веса и смещения по примерам из mini_batch.
         
         Считаем градиенты для всех примеров mini-batch после 
@@ -259,10 +263,17 @@ class Network(object):
         nabla_w, nabla_b = self.backprop(x, y)
 
         mb_size = x.shape[1]
-        self.weights = [(1-eta*(self.lmbda/self.n_samples))*w-(eta/mb_size)*nw 
-                        for w, nw in zip(self.weights, nabla_w)]
-        self.biases = [b-(eta/mb_size)*nb 
-                        for b, nb in zip(self.biases, nabla_b)]
+        for i, ((v_w, v_b), w, nw, nb) in \
+            enumerate(zip(self.velocities, self.weights, nabla_w, nabla_b)):
+            # weights
+            gradient_w = (1/mb_size)*nw + (self.lmbda/self.n_samples)*w
+            self.velocities[i][0] = mu*v_w - eta*gradient_w
+            # biases
+            gradient_b = (1/mb_size)*nb
+            self.velocities[i][1] = mu*v_b - eta*gradient_b
+
+        self.weights = [w+v for w, (v, _) in zip(self.weights, self.velocities)]
+        self.biases = [b+v for b, (_, v) in zip(self.biases, self.velocities)]
     
     def backprop(self, x, y):
         """Алгоритм обратного распространения ошибки. Возвращает dC/dw и dC/db."""
