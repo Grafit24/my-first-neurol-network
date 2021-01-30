@@ -422,6 +422,15 @@ class Network(object):
         }
         with open(file_name, "w") as f:
             json.dump(obj, f)
+    
+    def info(self):
+        sizes = self.sizes
+        count_of_params = sum([zn*zl+zl 
+                               for zn, zl in zip(sizes, sizes[1:])
+                               ])
+        text = "Network was initialized with %d params\n" % count_of_params
+        text += "-"*(len(text))
+        print(text)
 
 def load_pickle(file_name, from_folder=True):
     """Заружает pickle файл"""
