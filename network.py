@@ -22,6 +22,8 @@ from typing import List, Tuple, Dict
 import numpy as np
 import numpy.random as rand
 
+from functions import Sigmoid
+
 
 class Network(object):
     """Многослойный перцептрон с сигмоидной функцией активации.
@@ -80,11 +82,16 @@ class Network(object):
         Если сеть не улучшает результаты accuracy 
         в течение n epoch возвращает True.
     """
-    def __init__(self, sizes: List[int], random_state=None):
+    def __init__(self, sizes: List[int], func=Sigmoid, random_state=None):
         self.nlayers = len(sizes)
         self.sizes = sizes
         self.random_state = random_state
         self.cost_func = "cross-entropy"
+        
+        if not isinstance(func, (list, tuple)):
+            self.func = [func for i in range(self.nlayers-1)]
+        else:
+            self.func = func
 
         self.set_monitoring(evaluation_accuracy=True)
 
@@ -284,11 +291,11 @@ class Network(object):
         activations = [x]
         zs = []
         # feedforward
-        for w, b in zip(self.weights, self.biases):
+        for w, b, f in zip(self.weights, self.biases, self.func):
             b = b.reshape(-1, 1)
             z = np.dot(w, activation)+b
             zs.append(z)
-            activation = sigmoid(z)
+            activation = f.f(z)
             activations.append(activation)
             
         # output layer
@@ -299,7 +306,7 @@ class Network(object):
         # hidden layeres
         for l in range(2, self.nlayers):
             z = zs[-l]
-            sp = sigmoid_prime(z)
+            sp = self.func[-l].df(z)
             delta = np.dot(self.weights[-l+1].transpose(), delta)*sp
             nabla_w[-l] = np.dot(delta, activations[-l-1].transpose())
             nabla_b[-l] = delta.sum(axis=1)
@@ -308,14 +315,14 @@ class Network(object):
 
     def feedforward(self, a: np.ndarray)->np.ndarray:
         """Прямой проход через нейросеть."""
-        for w, b in zip(self.weights, self.biases):
-            a = sigmoid(np.dot(w, a)+b)
+        for w, b, f in zip(self.weights, self.biases, self.func):
+            a = f.f(np.dot(w, a)+b)
         return a
     
     def matrixbase_feedforward(self, a: np.ndarray)->np.ndarray:
         """Прямой проход через нейросеть."""
-        for w, b in zip(self.weights, self.biases):
-            a = sigmoid(np.dot(w, a)+b.reshape(-1, 1))
+        for w, b, f in zip(self.weights, self.biases, self.func):
+            a = f.f(np.dot(w, a)+b.reshape(-1, 1))
         return a
         
     def evaluate(self, data):
@@ -454,17 +461,6 @@ def load_json(file_name, from_folder=True):
         obj = json.load(f)
 
     return obj
-
-
-def sigmoid(x):
-    """Сигмоидная функция"""
-    return 1./(1. + np.exp(-x))
-
-
-def sigmoid_prime(x):
-    """Производная сигмойдной функции"""
-    sigm = sigmoid(x)
-    return (1. - sigm)*sigm
 
 def get_saves_path(file_extension):
     dirname = os.path.dirname(__file__)
