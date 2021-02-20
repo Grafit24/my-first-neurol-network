@@ -22,6 +22,8 @@ from typing import List, Tuple, Dict
 import numpy as np
 import numpy.random as rand
 
+from functions import Sigmoid
+
 
 class Network(object):
     """Многослойный перцептрон с сигмоидной функцией активации.
@@ -80,11 +82,16 @@ class Network(object):
         Если сеть не улучшает результаты accuracy 
         в течение n epoch возвращает True.
     """
-    def __init__(self, sizes: List[int], random_state=None):
+    def __init__(self, sizes: List[int], func=Sigmoid, random_state=None):
         self.nlayers = len(sizes)
         self.sizes = sizes
         self.random_state = random_state
         self.cost_func = "cross-entropy"
+        
+        if not isinstance(func, (list, tuple)):
+            self.func = [func for i in range(self.nlayers-1)]
+        else:
+            self.func = func
 
         self.set_monitoring(evaluation_accuracy=True)
 
@@ -94,6 +101,9 @@ class Network(object):
         rand.seed(random_state)
         self.biases = [rand.randn(sizes[i+1]) 
                        for i in range(self.nlayers-1)]
+        rand.seed(random_state)                       
+        self.velocities = [[np.zeros_like(w), np.zeros_like(b)]
+            for w, b in zip(self.weights, self.biases)]
     
     def set_monitoring(self, evaluation_accuracy=False, evaluation_cost=False, 
             training_accuracy=False, training_cost=False, 
@@ -127,7 +137,7 @@ class Network(object):
 
     
     def SGD(self, training_data, eta, epochs, mini_batch_size, 
-            evaluation_data=None, lmbda=0.0, n_epoch=None, factor=None,
+            evaluation_data=None, lmbda=0.0, mu=0.0, n_epoch=None, factor=None,
             ):
         """Обучает нейросеть по алгоритму stochastic gradient descent.
 
@@ -172,6 +182,7 @@ class Network(object):
         """
         self.eta = eta
         self.lmbda = lmbda
+        self.mu = mu
         self.epochs = epochs
         self.n_epoch = n_epoch
         self.factor = factor
@@ -208,7 +219,7 @@ class Network(object):
 
                 x = np.array(x).transpose()
                 y = np.array(y).transpose()
-                self.update_mb(x, y, eta)
+                self.update_mb(x, y, eta, mu)
             
             # Получаес данные по точности и потерям сети.
             if evaluation_data is not None:
@@ -241,7 +252,7 @@ class Network(object):
                 
         self.best_accuracy = max(self.accuracy_test)
 
-    def update_mb(self, x, y, eta):
+    def update_mb(self, x, y, eta, mu):
         """Обновляет веса и смещения по примерам из mini_batch.
         
         Считаем градиенты для всех примеров mini-batch после 
@@ -259,10 +270,17 @@ class Network(object):
         nabla_w, nabla_b = self.backprop(x, y)
 
         mb_size = x.shape[1]
-        self.weights = [(1-eta*(self.lmbda/self.n_samples))*w-(eta/mb_size)*nw 
-                        for w, nw in zip(self.weights, nabla_w)]
-        self.biases = [b-(eta/mb_size)*nb 
-                        for b, nb in zip(self.biases, nabla_b)]
+        for i, ((v_w, v_b), w, nw, nb) in \
+            enumerate(zip(self.velocities, self.weights, nabla_w, nabla_b)):
+            # weights
+            gradient_w = (1/mb_size)*nw + (self.lmbda/self.n_samples)*w
+            self.velocities[i][0] = mu*v_w - eta*gradient_w
+            # biases
+            gradient_b = (1/mb_size)*nb
+            self.velocities[i][1] = mu*v_b - eta*gradient_b
+
+        self.weights = [w+v for w, (v, _) in zip(self.weights, self.velocities)]
+        self.biases = [b+v for b, (_, v) in zip(self.biases, self.velocities)]
     
     def backprop(self, x, y):
         """Алгоритм обратного распространения ошибки. Возвращает dC/dw и dC/db."""
@@ -273,11 +291,11 @@ class Network(object):
         activations = [x]
         zs = []
         # feedforward
-        for w, b in zip(self.weights, self.biases):
+        for w, b, f in zip(self.weights, self.biases, self.func):
             b = b.reshape(-1, 1)
             z = np.dot(w, activation)+b
             zs.append(z)
-            activation = sigmoid(z)
+            activation = f.f(z)
             activations.append(activation)
             
         # output layer
@@ -288,7 +306,7 @@ class Network(object):
         # hidden layeres
         for l in range(2, self.nlayers):
             z = zs[-l]
-            sp = sigmoid_prime(z)
+            sp = self.func[-l].df(z)
             delta = np.dot(self.weights[-l+1].transpose(), delta)*sp
             nabla_w[-l] = np.dot(delta, activations[-l-1].transpose())
             nabla_b[-l] = delta.sum(axis=1)
@@ -297,14 +315,14 @@ class Network(object):
 
     def feedforward(self, a: np.ndarray)->np.ndarray:
         """Прямой проход через нейросеть."""
-        for w, b in zip(self.weights, self.biases):
-            a = sigmoid(np.dot(w, a)+b)
+        for w, b, f in zip(self.weights, self.biases, self.func):
+            a = f.f(np.dot(w, a)+b)
         return a
     
     def matrixbase_feedforward(self, a: np.ndarray)->np.ndarray:
         """Прямой проход через нейросеть."""
-        for w, b in zip(self.weights, self.biases):
-            a = sigmoid(np.dot(w, a)+b.reshape(-1, 1))
+        for w, b, f in zip(self.weights, self.biases, self.func):
+            a = f.f(np.dot(w, a)+b.reshape(-1, 1))
         return a
         
     def evaluate(self, data):
@@ -411,6 +429,15 @@ class Network(object):
         }
         with open(file_name, "w") as f:
             json.dump(obj, f)
+    
+    def info(self):
+        sizes = self.sizes
+        count_of_params = sum([zn*zl+zl 
+                               for zn, zl in zip(sizes, sizes[1:])
+                               ])
+        text = "Network was initialized with %d params\n" % count_of_params
+        text += "-"*(len(text))
+        print(text)
 
 def load_pickle(file_name, from_folder=True):
     """Заружает pickle файл"""
@@ -434,17 +461,6 @@ def load_json(file_name, from_folder=True):
         obj = json.load(f)
 
     return obj
-
-
-def sigmoid(x):
-    """Сигмоидная функция"""
-    return 1./(1. + np.exp(-x))
-
-
-def sigmoid_prime(x):
-    """Производная сигмойдной функции"""
-    sigm = sigmoid(x)
-    return (1. - sigm)*sigm
 
 def get_saves_path(file_extension):
     dirname = os.path.dirname(__file__)
