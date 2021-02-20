@@ -4,3 +4,4 @@ somefile.py
 .vscode/
 workspace.code-workspace
 .ipynb_checkpoints/
+data/train_expanded.csv
